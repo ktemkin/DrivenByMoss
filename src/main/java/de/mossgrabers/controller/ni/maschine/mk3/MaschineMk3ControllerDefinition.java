@@ -28,7 +28,7 @@ public class MaschineMk3ControllerDefinition extends DefaultControllerDefinition
      */
     public MaschineMk3ControllerDefinition ()
     {
-        super (EXTENSION_ID, "Maschine Mk3", "Native Instruments", 1, 1);
+        super (EXTENSION_ID, "Maschine Mk3 (DBM)", "Native Instruments", 1, 1);
     }
 
 

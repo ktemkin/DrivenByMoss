@@ -79,6 +79,7 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
 
     private final List<IComponent>         columns                         = new ArrayList<> (8);
     private final AtomicReference<String>  notificationMessage             = new AtomicReference<> ();
+	private boolean                        splitDisplay                    = false;
     private ModelInfo                      info                            = new ModelInfo (null, Collections.emptyList ());
 
     protected final IHost                  host;
@@ -102,6 +103,7 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
         this.host = host;
         this.configuration = configuration;
         this.dimensions = dimensions;
+		this.splitDisplay = false;
 
         ResourceHandler.init (host);
 
@@ -111,6 +113,21 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
         // Manage notification message display time
         this.executor.scheduleAtFixedRate (this::checkNotificationCounter, 1, 1, TimeUnit.SECONDS);
     }
+
+    /**
+     * Constructor.
+     *
+     * @param host The host
+     * @param configuration The configuration
+     * @param dimensions The pre-calculated dimensions
+     * @param windowTitle The window title
+	 * @param splitDisplay True if the display is split; e.g. there's a disruption in the center display, as on some NI devices.
+     */
+    protected AbstractGraphicDisplay (final IHost host, final IGraphicsConfiguration configuration, final IGraphicsDimensions dimensions, final String windowTitle, final boolean splitDisplay)
+	{
+		this (host, configuration, dimensions, windowTitle);
+		this.splitDisplay = splitDisplay;
+	}
 
 
     /** {@inheritDoc} */
@@ -459,7 +476,7 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
                 return;
 
             final ColorEx colorText = this.configuration.getColorText ();
-            gc.drawTextInBounds (notification, 0, 0, width, height, Align.CENTER, colorText, colorBorder, height / 4.0);
+            gc.drawTextInBounds (notification, 0, 0, this.splitDisplay ? width / 2 : width, height, Align.CENTER, colorText, colorBorder, height / 4.0);
         });
     }
 

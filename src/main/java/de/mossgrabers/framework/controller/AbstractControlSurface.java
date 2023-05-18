@@ -192,8 +192,11 @@ public abstract class AbstractControlSurface<C extends Configuration> implements
             final IHwButton pad = this.createButton (buttonID, "P " + (i + 1));
             pad.addLight (this.surfaceFactory.createLight (this.surfaceID, null, () -> this.padGrid.getLightInfo (note).getEncoded (), state -> this.padGrid.sendState (note), colorIndex -> this.colorManager.getColor (colorIndex, buttonID), pad));
             final int [] translated = this.padGrid.translateToController (note);
-            pad.bind (this.input, BindType.NOTE, translated[0], translated[1]);
-            pad.bind ( (event, velocity) -> this.handleGridNote (event, note, velocity));
+
+			if (this.input != null) {
+				pad.bind (this.input, BindType.NOTE, translated[0], translated[1]);
+			}
+			pad.bind ( (event, velocity) -> this.handleGridNote (event, note, velocity));
         }
     }
 
