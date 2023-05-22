@@ -7,6 +7,7 @@ package de.mossgrabers.controller.ni.maschine.mk3.mode;
 import de.mossgrabers.controller.ni.maschine.mk3.MaschineConfiguration;
 import de.mossgrabers.controller.ni.maschine.mk3.controller.MaschineControlSurface;
 import de.mossgrabers.framework.controller.ContinuousID;
+import de.mossgrabers.framework.controller.display.IGraphicDisplay;
 import de.mossgrabers.framework.daw.IModel;
 import de.mossgrabers.framework.daw.data.IItem;
 import de.mossgrabers.framework.featuregroup.AbstractParameterMode;
@@ -19,7 +20,7 @@ import java.util.List;
  *
  * @author Jürgen Moßgraber
  */
-public abstract class BaseMode extends AbstractParameterMode<MaschineControlSurface, MaschineConfiguration, IItem>
+public abstract class BaseMode extends AbstractParameterMode<MaschineControlSurface, MaschineConfiguration, IItem> implements IMaschineMode
 {
     protected int selectedParam = 0;
 
@@ -99,4 +100,15 @@ public abstract class BaseMode extends AbstractParameterMode<MaschineControlSurf
     {
         return this.selectedParam;
     }
+
+    /** {@inheritDoc} */
+	@Override
+	public void updateDisplay() {
+		this.delegatePerDisplayType();
+	}
+
+	@Override
+	public MaschineControlSurface getSurface() {
+		return this.surface;
+	}
 }

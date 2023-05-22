@@ -4,10 +4,13 @@
 
 package de.mossgrabers.controller.ni.maschine.mk3.mode;
 
+import java.util.Arrays;
+
 import de.mossgrabers.controller.ni.maschine.mk3.MaschineConfiguration;
 import de.mossgrabers.controller.ni.maschine.mk3.controller.MaschineControlSurface;
 import de.mossgrabers.controller.ni.maschine.mk3.view.PlayView;
 import de.mossgrabers.framework.controller.ButtonID;
+import de.mossgrabers.framework.controller.display.IGraphicDisplay;
 import de.mossgrabers.framework.controller.display.ITextDisplay;
 import de.mossgrabers.framework.daw.IModel;
 import de.mossgrabers.framework.mode.INoteMode;
@@ -150,22 +153,32 @@ public class PlayConfigurationMode extends BaseMode
 
 
     /** {@inheritDoc} */
-    @Override
-    public void updateDisplay ()
-    {
-        final ITextDisplay d = this.surface.getTextDisplay ().clear ();
-
+	@Override
+	public void updateTextDisplay(ITextDisplay d) {
         final Scales scales = this.model.getScales ();
-
         d.setBlock (0, 0, this.mark ("Scale", 0)).setBlock (1, 0, scales.getScale ().getName ());
         d.setCell (0, 3, this.mark ("Base", 3)).setCell (1, 3, Scales.BASES.get (scales.getScaleOffsetIndex ()));
         d.setBlock (0, 2, this.mark ("Layout", 4)).setBlock (1, 2, StringUtils.optimizeName (scales.getScaleLayout ().getName (), 12));
         d.setCell (0, 6, this.mark ("In-Key", 6)).setCell (1, 6, scales.isChromatic () ? "Off" : "On");
         final int octave = scales.getOctave ();
         d.setCell (0, 7, this.mark ("Octave", 7)).setCell (1, 7, (octave > 0 ? "+" : "") + Integer.toString (octave));
+	}
 
-        d.allDone ();
-    }
+
+    /** {@inheritDoc} */
+	@Override
+	public void updateGraphicsDisplay(IGraphicDisplay display) {
+        final Scales scales = this.model.getScales ();
+		display.addOptionElement("", "Volume", false, "Scale", scales.getScale().getName(), false, true);
+		display.addOptionElement("", "Pan", false, "", "", false, true);
+		display.addOptionElement("", "Crossfade", false, "", "", false, true);
+		display.addOptionElement("", "Sends", false, "Base", Scales.BASES.get(scales.getScaleOffsetIndex()), false, true);
+		display.addOptionElement("", "FX 1", false, "Layout", scales.getScaleLayout().getName(), false, true);
+		display.addOptionElement("", " ", false, "", "", false, true);
+		display.addOptionElement("", " ", false, "In Key", scales.isChromatic() ? "Off" : "On", false, true);
+        final int octave = scales.getOctave ();
+		display.addOptionElement("", " ", false, " Oct", (octave > 0 ? "+" : "") + Integer.toString(octave), false, true);
+	}
 
 
     /** {@inheritDoc} */
@@ -203,4 +216,7 @@ public class PlayConfigurationMode extends BaseMode
         config.setScaleBase (Scales.BASES.get (scales.getScaleOffsetIndex ()));
         config.setScaleLayout (scales.getScaleLayout ().getName ());
     }
+
+
+
 }

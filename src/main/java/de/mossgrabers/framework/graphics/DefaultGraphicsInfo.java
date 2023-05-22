@@ -15,6 +15,7 @@ public class DefaultGraphicsInfo implements IGraphicsInfo
     private final IGraphicsConfiguration configuration;
     private final IGraphicsDimensions    dimensions;
     private final IBounds                bounds;
+	private final double                 textScalingFactor;
 
 
     /**
@@ -30,6 +31,7 @@ public class DefaultGraphicsInfo implements IGraphicsInfo
         this.configuration = configuration;
         this.dimensions = dimensions;
         this.bounds = null;
+		this.textScalingFactor = 1;
     }
 
 
@@ -47,6 +49,26 @@ public class DefaultGraphicsInfo implements IGraphicsInfo
         this.configuration = configuration;
         this.dimensions = dimensions;
         this.bounds = bounds;
+		this.textScalingFactor = 1;
+    }
+
+
+    /**
+     * Constructor.
+     *
+     * @param gc The graphics context
+     * @param configuration The configuration
+     * @param dimensions The pre-calculated dimensions
+     * @param bounds The bounds
+	 * @param fontScalingFactor A factor by which all fonts are scaled. May be used for accessiblity, where possible.
+     */
+    public DefaultGraphicsInfo (final IGraphicsContext gc, final IGraphicsConfiguration configuration, final IGraphicsDimensions dimensions, final IBounds bounds, final double fontScalingFactor)
+    {
+        this.gc = gc;
+        this.configuration = configuration;
+        this.dimensions = dimensions;
+        this.bounds = bounds;
+		this.textScalingFactor = fontScalingFactor;
     }
 
 
@@ -84,6 +106,14 @@ public class DefaultGraphicsInfo implements IGraphicsInfo
 
     /** {@inheritDoc} */
     @Override
+    public double getFontScalingFactor ()
+    {
+        return this.textScalingFactor;
+    }
+
+
+    /** {@inheritDoc} */
+    @Override
     public IGraphicsInfo withBounds (final double top, final double height)
     {
         return this.withBounds (this.bounds.left (), top, this.bounds.width (), height);
@@ -94,6 +124,6 @@ public class DefaultGraphicsInfo implements IGraphicsInfo
     @Override
     public IGraphicsInfo withBounds (final double left, final double top, final double width, final double height)
     {
-        return new DefaultGraphicsInfo (this.gc, this.configuration, this.dimensions, new DefaultBounds (left, top, width, height));
+        return new DefaultGraphicsInfo (this.gc, this.configuration, this.dimensions, new DefaultBounds (left, top, width, height), this.getFontScalingFactor());
     }
 }

@@ -7,6 +7,7 @@ package de.mossgrabers.controller.ni.maschine.mk3.mode;
 import de.mossgrabers.controller.ni.maschine.mk3.MaschineConfiguration;
 import de.mossgrabers.controller.ni.maschine.mk3.controller.MaschineControlSurface;
 import de.mossgrabers.framework.controller.ButtonID;
+import de.mossgrabers.framework.controller.display.IGraphicDisplay;
 import de.mossgrabers.framework.controller.display.ITextDisplay;
 import de.mossgrabers.framework.controller.valuechanger.IValueChanger;
 import de.mossgrabers.framework.daw.IHost;
@@ -132,12 +133,8 @@ public class NoteRepeatMode extends BaseMode
         }
     }
 
-
-    /** {@inheritDoc} */
-    @Override
-    public void updateDisplay ()
-    {
-        final ITextDisplay d = this.surface.getTextDisplay ().clear ();
+	@Override
+	public void updateTextDisplay(ITextDisplay d) {
 
         final String [] names = Resolution.getNames ();
 
@@ -165,9 +162,16 @@ public class NoteRepeatMode extends BaseMode
             d.setBlock (0, 3, this.mark ("Octaves", 6));
             d.setBlock (1, 3, Integer.toString (octaves));
         }
-
-        d.allDone ();
     }
+
+
+	@Override
+	public void updateGraphicsDisplay(IGraphicDisplay display) {
+		// TODO Auto-generated method stub
+		
+	}
+
+
 
 
     /**
@@ -214,4 +218,6 @@ public class NoteRepeatMode extends BaseMode
         if (this.selectedParam > 6)
             this.selectedParam = 6;
     }
+
+
 }

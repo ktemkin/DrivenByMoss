@@ -7,6 +7,7 @@ package de.mossgrabers.controller.ni.maschine.mk3.mode;
 import de.mossgrabers.controller.ni.maschine.mk3.controller.MaschineControlSurface;
 import de.mossgrabers.controller.ni.maschine.mk3.view.DrumView;
 import de.mossgrabers.framework.controller.ButtonID;
+import de.mossgrabers.framework.controller.display.IGraphicDisplay;
 import de.mossgrabers.framework.controller.display.ITextDisplay;
 import de.mossgrabers.framework.daw.IModel;
 import de.mossgrabers.framework.featuregroup.ViewManager;
@@ -92,20 +93,30 @@ public class DrumConfigurationMode extends BaseMode
         }
     }
 
-
-    /** {@inheritDoc} */
-    @Override
-    public void updateDisplay ()
-    {
-        final ITextDisplay d = this.surface.getTextDisplay ().clear ();
-
+	@Override
+	public void updateGraphicsDisplay(IGraphicDisplay display) {
         final Scales scales = this.model.getScales ();
-
         final int octave = scales.getDrumOffset ();
-        d.setBlock (0, 3, this.mark ("Drum Offset", 6)).setBlock (1, 3, (octave > 0 ? "+" : "") + Integer.toString (octave));
 
-        d.allDone ();
-    }
+		display.addOptionElement("", "Volume", false, "", "", false, true);
+		display.addOptionElement("", "Pan", false, "", "", false, true);
+		display.addOptionElement("", "Crossfade", false, "Drum Offset", (octave > 0 ? "+" : "") + Integer.toString (octave), false, true);
+		display.addOptionElement("", "Sends", false, "", "", false, true);
+
+		display.addOptionElement("", "FX 1", false, "", "", false, true);
+		display.addOptionElement("", " ", false, "", "", false, true);
+		display.addOptionElement("", " ", false, "", "", false, true);
+		display.addOptionElement("", " ", false, "", "", false, true);
+	}
+
+
+	@Override
+	public void updateTextDisplay(ITextDisplay d) {
+        final Scales scales = this.model.getScales ();
+        final int octave = scales.getDrumOffset ();
+
+        d.setBlock (0, 3, this.mark ("Drum Offset", 6)).setBlock (1, 3, (octave > 0 ? "+" : "") + Integer.toString (octave));
+	}
 
 
     /** {@inheritDoc} */
@@ -122,4 +133,5 @@ public class DrumConfigurationMode extends BaseMode
     {
         // Not used since it is only 1 parameter
     }
+
 }

@@ -5,6 +5,7 @@
 package de.mossgrabers.controller.ni.maschine.mk3.mode;
 
 import de.mossgrabers.controller.ni.maschine.mk3.controller.MaschineControlSurface;
+import de.mossgrabers.framework.controller.display.IGraphicDisplay;
 import de.mossgrabers.framework.controller.display.ITextDisplay;
 import de.mossgrabers.framework.daw.IBrowser;
 import de.mossgrabers.framework.daw.IModel;
@@ -61,11 +62,9 @@ public class BrowseMode extends BaseMode
 
 
     /** {@inheritDoc} */
-    @Override
-    public void updateDisplay ()
-    {
+	@Override
+	public void updateTextDisplay(ITextDisplay d) {
         final IBrowser browser = this.model.getBrowser ();
-        final ITextDisplay d = this.surface.getTextDisplay ();
         final boolean isPresetSession = browser.isPresetContentType ();
         final ICursorDevice cd = this.model.getCursorDevice ();
         if (isPresetSession && !(browser.isActive () && cd.doesExist ()))
@@ -97,8 +96,16 @@ public class BrowseMode extends BaseMode
         if (this.getSelectedParameter () == 7)
             selectedContentType = ">" + selectedContentType;
         d.setCell (0, 7, selectedContentType).setCell (1, 7, selectedResult == null || selectedResult.length () == 0 ? "-" : selectedResult);
-        d.allDone ();
     }
+
+
+    /** {@inheritDoc} */
+	@Override
+	public void updateGraphicsDisplay(IGraphicDisplay display) {
+		// TODO(ktemkin):
+		// The browser mode is going to require a complete redesign; since nothing in DrivenByMoss
+		// has the UI I want for this. Soon.~
+	}
 
 
     /**

@@ -1,28 +1,42 @@
+// Written by Kate Temkin - ktemk.in
 // Written by Jürgen Moßgraber - mossgrabers.de
 // (c) 2017-2023
 // Licensed under LGPLv3 - http://www.gnu.org/licenses/lgpl-3.0.txt
 
 package de.mossgrabers.controller.ni.maschine.mk3.mode;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
 import de.mossgrabers.controller.ni.maschine.mk3.MaschineConfiguration;
 import de.mossgrabers.controller.ni.maschine.mk3.controller.MaschineControlSurface;
+import de.mossgrabers.framework.controller.ButtonID;
+import de.mossgrabers.framework.controller.display.AbstractGraphicDisplay;
+import de.mossgrabers.framework.controller.display.IGraphicDisplay;
 import de.mossgrabers.framework.controller.display.ITextDisplay;
+import de.mossgrabers.framework.controller.valuechanger.IValueChanger;
 import de.mossgrabers.framework.daw.IModel;
+import de.mossgrabers.framework.daw.constants.Capability;
+import de.mossgrabers.framework.daw.data.ICursorTrack;
 import de.mossgrabers.framework.daw.data.ITrack;
+import de.mossgrabers.framework.daw.data.bank.ISendBank;
 import de.mossgrabers.framework.daw.data.bank.ITrackBank;
+import de.mossgrabers.framework.daw.resource.ChannelType;
 import de.mossgrabers.framework.mode.track.TrackVolumeMode;
+import de.mossgrabers.framework.utils.Pair;
 import de.mossgrabers.framework.utils.StringUtils;
 
 
 /**
  * Mode for editing a volume parameter of all tracks.
  *
- * @author Jürgen Moßgraber
+ * @author Jürgen Moßgraber and Kate Temkin
  */
-public class MaschineVolumeMode extends TrackVolumeMode<MaschineControlSurface, MaschineConfiguration>
+public class MaschineVolumeMode extends TrackVolumeMode<MaschineControlSurface, MaschineConfiguration> implements IMaschineTrackMode
 {
     private boolean displayVU = false;
-
+    protected final List<Pair<String, Boolean>> menu = new ArrayList<> ();
 
     /**
      * Constructor.
@@ -35,14 +49,20 @@ public class MaschineVolumeMode extends TrackVolumeMode<MaschineControlSurface, 
         super (surface, model, false, surface.getMaschine ().hasMCUDisplay () ? DEFAULT_KNOB_IDS : null);
 
         this.initTouchedStates (9);
+
+        for (int i = 0; i < 8; i++)
+            this.menu.add (new Pair<> (" ", Boolean.FALSE));
     }
 
+	@Override
+	public void updateDisplay() {
+		this.delegatePerDisplayType();
+	}
 
-    /** {@inheritDoc} */
-    @Override
-    public void updateDisplay ()
+
+	@Override
+    public void updateTextDisplay (ITextDisplay d)
     {
-        final ITextDisplay d = this.surface.getTextDisplay ();
         final ITrackBank tb = this.model.getCurrentTrackBank ();
         for (int i = 0; i < 8; i++)
         {
@@ -60,8 +80,14 @@ public class MaschineVolumeMode extends TrackVolumeMode<MaschineControlSurface, 
             else
                 d.setCell (1, i, t.getVolumeStr (6));
         }
-        d.allDone ();
     }
+
+
+	@Override
+    public void updateGraphicsDisplay (IGraphicDisplay display) 
+	{
+		this.updateGraphicsChannelDisplay(display, AbstractGraphicDisplay.GRID_ELEMENT_CHANNEL_VOLUME, true, false);
+	}
 
 
     /** {@inheritDoc} */
@@ -81,4 +107,22 @@ public class MaschineVolumeMode extends TrackVolumeMode<MaschineControlSurface, 
     {
         this.displayVU = !this.displayVU;
     }
+
+
+	@Override
+	public MaschineControlSurface getSurface() {
+		return this.surface;
+	}
+
+
+	@Override
+	public IModel getModel() {
+		return this.model;
+	}
+
+
+	@Override
+	public List<Pair<String, Boolean>> getMenu() {
+		return this.menu;
+	}
 }

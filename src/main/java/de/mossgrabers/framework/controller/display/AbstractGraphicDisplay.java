@@ -80,6 +80,8 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
     private final List<IComponent>         columns                         = new ArrayList<> (8);
     private final AtomicReference<String>  notificationMessage             = new AtomicReference<> ();
     private ModelInfo                      info                            = new ModelInfo (null, Collections.emptyList ());
+	private final boolean                  isSplitDisplay;
+	private final double                   fontScalingFactor;
 
     protected final IHost                  host;
     protected final IGraphicsConfiguration configuration;
@@ -99,9 +101,24 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
      */
     protected AbstractGraphicDisplay (final IHost host, final IGraphicsConfiguration configuration, final IGraphicsDimensions dimensions, final String windowTitle)
     {
+		this(host, configuration, dimensions, windowTitle, false, 1.0);
+    }
+
+
+    /**
+     * Constructor.
+     *
+     * @param host The host
+     * @param configuration The configuration
+     * @param dimensions The pre-calculated dimensions
+     * @param windowTitle The window title
+     */
+    protected AbstractGraphicDisplay (final IHost host, final IGraphicsConfiguration configuration, final IGraphicsDimensions dimensions, final String windowTitle, boolean isSplitDisplay, double fontScalingFactor) {
         this.host = host;
         this.configuration = configuration;
         this.dimensions = dimensions;
+		this.isSplitDisplay = isSplitDisplay;
+		this.fontScalingFactor = fontScalingFactor;
 
         ResourceHandler.init (host);
 
@@ -110,7 +127,7 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
 
         // Manage notification message display time
         this.executor.scheduleAtFixedRate (this::checkNotificationCounter, 1, 1, TimeUnit.SECONDS);
-    }
+	}
 
 
     /** {@inheritDoc} */
@@ -446,7 +463,7 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
             final double paintWidth = gridWidth - separatorSize;
             final double offsetX = separatorSize / 2.0;
 
-            final IGraphicsInfo graphicsInfo = new DefaultGraphicsInfo (gc, this.configuration, this.dimensions);
+            final IGraphicsInfo graphicsInfo = new DefaultGraphicsInfo (gc, this.configuration, this.dimensions, null, this.fontScalingFactor);
             for (int i = 0; i < size; i++)
             {
                 final IComponent component = elements.get (i);
@@ -459,7 +476,7 @@ public abstract class AbstractGraphicDisplay implements IGraphicDisplay
                 return;
 
             final ColorEx colorText = this.configuration.getColorText ();
-            gc.drawTextInBounds (notification, 0, 0, width, height, Align.CENTER, colorText, colorBorder, height / 4.0);
+            gc.drawTextInBounds (notification, 0, 0, this.isSplitDisplay ? width / 2 : width, height, Align.CENTER, colorText, colorBorder, height / 4.0);
         });
     }
 

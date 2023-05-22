@@ -99,6 +99,7 @@ public class LabelComponent implements IComponent
         final double top = bounds.top ();
         final double width = bounds.width ();
         final double height = bounds.height ();
+		final double fontScale = info.getFontScalingFactor();
 
         final IGraphicsContext gc = info.getContext ();
         if (this.layout == LabelLayout.SMALL_HEADER)
@@ -111,10 +112,12 @@ public class LabelComponent implements IComponent
 
         final double unit = dimensions.getUnit ();
 
-        if (this.layout == LabelLayout.SMALL_HEADER)
-            gc.drawTextInBounds (this.text, left, 1, width, unit + separatorSize, Align.CENTER, textColor, unit);
+        if (this.layout == LabelLayout.SMALL_HEADER) {
+			final double smallHeaderFontScale = (fontScale < 1) ? 1 : fontScale;
+            gc.drawTextInBounds (this.text, left, 1, width, unit + separatorSize, Align.CENTER, textColor, unit * smallHeaderFontScale);
+		}
         else
-            gc.drawTextInBounds (this.text, left, top, width, height, Align.CENTER, textColor, height / 2);
+            gc.drawTextInBounds (this.text, left, top, width, height, Align.CENTER, textColor, (height / 2) * fontScale);
     }
 
 
@@ -155,7 +158,7 @@ public class LabelComponent implements IComponent
                 gc.maskImage (image, left + (doubleUnit - image.getWidth ()) / 2, textTop + (trackRowHeight - image.getHeight ()) / 2.0, maskColor);
         }
 
-        gc.drawTextInBounds (this.text, left + doubleUnit, textTop, width - doubleUnit, trackRowHeight, Align.LEFT, this.modifyIfOff (configuration.getColorText ()), 1.2 * unit);
+        gc.drawTextInBounds (this.text, left + doubleUnit, textTop, width - doubleUnit, trackRowHeight, Align.LEFT, this.modifyIfOff (configuration.getColorText ()), 1.2 * unit * info.getFontScalingFactor());
 
         // The track color section
         final ColorEx infoColor = this.backgroundColor;

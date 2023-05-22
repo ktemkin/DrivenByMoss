@@ -1,3 +1,4 @@
+//
 // Written by Jürgen Moßgraber - mossgrabers.de
 // (c) 2017-2023
 // Licensed under LGPLv3 - http://www.gnu.org/licenses/lgpl-3.0.txt
@@ -5,6 +6,8 @@
 package de.mossgrabers.controller.ni.maschine.mk3;
 
 import de.mossgrabers.controller.mackie.mcu.controller.MCUDisplay;
+import de.mossgrabers.controller.ni.core.AbstractNIHostInterop;
+import de.mossgrabers.controller.ni.core.NIGraphicDisplay;
 import de.mossgrabers.controller.ni.maschine.Maschine;
 import de.mossgrabers.controller.ni.maschine.core.MaschineColorManager;
 import de.mossgrabers.controller.ni.maschine.core.RibbonMode;
@@ -84,6 +87,7 @@ import de.mossgrabers.framework.controller.AbstractControllerSetup;
 import de.mossgrabers.framework.controller.ButtonID;
 import de.mossgrabers.framework.controller.ContinuousID;
 import de.mossgrabers.framework.controller.ISetupFactory;
+import de.mossgrabers.framework.controller.display.IGraphicDisplay;
 import de.mossgrabers.framework.controller.hardware.BindType;
 import de.mossgrabers.framework.controller.hardware.IHwAbsoluteKnob;
 import de.mossgrabers.framework.controller.hardware.IHwRelativeKnob;
@@ -108,6 +112,7 @@ import de.mossgrabers.framework.utils.FrameworkException;
 import de.mossgrabers.framework.utils.OperatingSystem;
 import de.mossgrabers.framework.view.Views;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -216,11 +221,42 @@ public class MaschineControllerSetup extends AbstractControllerSetup<MaschineCon
         final MaschineControlSurface surface = new MaschineControlSurface (this.host, this.colorManager, this.maschine, this.configuration, output, input);
         this.surfaces.add (surface);
 
-        if (this.maschine.hasMCUDisplay ())
+		if (this.maschine.hasMCUDisplay ())
         {
-            final MCUDisplay display = new MCUDisplay (this.host, output, true, false, false);
-            display.setCenterNotification (false);
-            surface.addTextDisplay (display);
+			// Create a graphics display, if we can.
+			if (this.maschine.hasNIGraphicDisplay()) {
+
+				try {
+					// TODO(ktemkin): Currently, if there's more than one of the same device connected, the NIServices
+					// always just return information about the first one. We _should_ be able to work around that by
+					// fetching the USB serial number, but this requires us to match to the USB device, even if we don't
+					// open it. That seems messy, but that may be necessary.
+					//
+					// For now, we'll just let the user specify which serial they want to talk to in settings.
+					// Hopefully that's ripped out before the final version.
+					//
+					final int deviceId = this.maschine.getDeviceId();
+					final String serial = this.configuration.getSerialForDisplay();
+
+					if ((serial != null) && !serial.isEmpty()) {
+						final NIGraphicDisplay display = new NIGraphicDisplay(this.host, this.valueChanger.getUpperBound(), this.configuration, deviceId, serial);
+						surface.addGraphicsDisplay(display);
+
+						this.host.println("Graphics display set up on Maschine with serial " + serial + ".");
+					}
+				} 
+				catch (IOException ex) {
+					this.host.error("Couldn't create NI service connection. Falling back to MCU display.");
+					// If we can't create a graphics display, don't panic: we'll fall back to MCU display.
+				}
+			}
+
+			// If we don't have a grahpic display, but we can create an MCU text one, do so.
+			if ((surface.getGraphicsDisplay() == null) && this.maschine.hasMCUDisplay()) {
+				final MCUDisplay display = new MCUDisplay (this.host, output, true, false, false);
+				display.setCenterNotification (false);
+				surface.addTextDisplay (display);
+			}
         }
     }
 
@@ -250,7 +286,7 @@ public class MaschineControllerSetup extends AbstractControllerSetup<MaschineCon
         modeManager.register (Modes.NOTE, new EditNoteMode (surface, this.model));
 
         modeManager.register (Modes.DEVICE_PARAMS, new MaschineParametersMode (surface, this.model));
-        if (this.maschine.hasMCUDisplay ())
+        if (this.maschine.hasMCUDisplay () || this.maschine.hasNIGraphicDisplay())
             modeManager.register (Modes.USER, new MaschineUserMode (surface, this.model));
 
         modeManager.setDefaultID (Modes.VOLUME);
@@ -1058,7 +1094,7 @@ public class MaschineControllerSetup extends AbstractControllerSetup<MaschineCon
         surface.getContinuous (ContinuousID.MASTER_KNOB).setBounds (53.0, 362.25, 64.0, 63.0);
         surface.getContinuous (ContinuousID.CROSSFADER).setBounds (24.0, 498.75, 268.0, 50.0);
 
-        surface.getTextDisplay ().getHardwareDisplay ().setBounds (182.75, 111.75, 591.75, 64.5);
+        //surface.getGraphicsDisplay().getHardwareDisplay ().setBounds (182.75, 111.75, 591.75, 64.5);
     }
 
 

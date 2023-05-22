@@ -72,6 +72,7 @@ public class OptionsComponent implements IComponent
         final IBounds bounds = info.getBounds ();
         final double left = bounds.left ();
         final double height = bounds.height ();
+		final double fontScale = info.getFontScalingFactor();
 
         this.footer.draw (info.withBounds (height - menuHeight, menuHeight));
 
@@ -83,13 +84,13 @@ public class OptionsComponent implements IComponent
         final double headerHeight = (height - 2 * menuHeight) / 2;
         final ColorEx textColor = configuration.getColorText ();
         if (hasTopHeader)
-            gc.drawTextInHeight (this.headerTop, left, menuHeight, headerHeight, textColor, headerHeight / 2.0);
+            gc.drawTextInHeight (this.headerTop, left, menuHeight, headerHeight, textColor, (headerHeight / 2.0) * fontScale);
         if (hasBottomHeader)
         {
             if (this.isBottomHeaderSelected)
-                gc.drawTextInHeight (this.headerBottom, left, menuHeight + headerHeight, headerHeight, ColorEx.calcContrastColor (textColor), textColor, headerHeight / 2.0);
+                gc.drawTextInHeight (this.headerBottom, left, menuHeight + headerHeight * 1.25, headerHeight, ColorEx.calcContrastColor (textColor), textColor, (headerHeight / 2.0) * fontScale);
             else
-                gc.drawTextInHeight (this.headerBottom, left, menuHeight + headerHeight, headerHeight, textColor, headerHeight / 2.0);
+                gc.drawTextInHeight (this.headerBottom, left, menuHeight + headerHeight * 1.25, headerHeight, textColor, (headerHeight / 2.0) * fontScale );
         }
     }
 

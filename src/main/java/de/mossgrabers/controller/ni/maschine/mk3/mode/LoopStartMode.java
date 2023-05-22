@@ -40,15 +40,27 @@ public class LoopStartMode extends BaseMode
 
     /** {@inheritDoc} */
     @Override
-    public void updateDisplay ()
+    public void updateTextDisplay (ITextDisplay d)
     {
-        final ITextDisplay d = this.surface.getTextDisplay ().clear ();
-
         final ITransport transport = this.model.getTransport ();
         d.setBlock (0, 0, "Arranger Loop");
-        d.setBlock (0, 2, "Start:").setBlock (0, 3, "> " + transport.getLoopStartBeatText ());
-        d.setBlock (1, 2, "Length:").setBlock (1, 3, "  " + transport.getLoopLengthBeatText ());
+        d.setBlock (0, 2, "Start:").setBlock (0, 3, "  " + transport.getLoopStartBeatText ());
+        d.setBlock (1, 2, "Length:").setBlock (1, 3, "> " + transport.getLoopLengthBeatText ());
+    }
 
-        d.allDone ();
+
+    /** {@inheritDoc} */
+    @Override
+    public void updateGraphicsDisplay (IGraphicDisplay display)
+    {
+        final ITransport transport = this.model.getTransport ();
+		display.addOptionElement("Loop", "Volume", false, "Start:", "  " + transport.getLoopStartBeatText(), false, true);
+		display.addOptionElement("Loop", "Pan", false, "Length:", "> " + transport.getLoopLengthBeatText(), false, true);
+		display.addOptionElement("", "Crossfade", false, "", "", false, true);
+		display.addOptionElement("", "Sends", false, "", "", false, true);
+		display.addOptionElement("", "FX 1", false, "", "", false, true);
+		display.addOptionElement("", "", false, "", "", false, true);
+		display.addOptionElement("", "", false, "", "", false, true);
+		display.addOptionElement("", "", false, "", "", false, true);
     }
 }

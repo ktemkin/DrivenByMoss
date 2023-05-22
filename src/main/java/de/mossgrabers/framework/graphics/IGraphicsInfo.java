@@ -63,4 +63,12 @@ public interface IGraphicsInfo
      * @return The new instance
      */
     IGraphicsInfo withBounds (final double left, final double top, final double width, final double height);
+
+
+	/**
+	 * Applies a font-size scaling factor, if provided.
+	 */
+	default double getFontScalingFactor() {
+		return 1;
+	}
 }
