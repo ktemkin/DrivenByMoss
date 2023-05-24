@@ -9,9 +9,8 @@ import de.mossgrabers.framework.utils.OperatingSystem;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.nio.ByteOrder;
-import java.nio.CharBuffer;
+import java.util.HashMap;
 import java.nio.charset.Charset;
 
 
@@ -23,6 +22,9 @@ import java.nio.charset.Charset;
  */
 public abstract class AbstractNIHostInterop {
 	protected IHost host;
+
+	/** True iff this is a 'global' connection, rather than a per-device one. */
+	protected final boolean isGlobalConnection;
 
 	/** The device ID -- matches the device ID used elsewhere; and the USB PID. */
 	protected int deviceId;
@@ -51,6 +53,8 @@ public abstract class AbstractNIHostInterop {
 	/** Unknown constant necessary for setting project names. */
 	protected final static int NI_PROJECT_NAME_UNKNOWN2 = 0xf6b24000;
 
+	/** The well-known mach port we'll use to communicate with the NIHostIntegrationAgent. */
+	protected final static String NI_BOOTSTRAP_PORT = "com.native-instruments.NIHostIntegrationAgent";
 
 	//
 	// Messages.
@@ -98,17 +102,47 @@ public abstract class AbstractNIHostInterop {
 
 
 	/**
+	 * Creates a new interface for connecting to the NIHostIntegrationAgent.
+	 *
+	 * @param The DeviceID for the relevant NI device.
+	 * @param The device's serial; or null / empty string for an non-device-specific connection.
+	 */
+	public AbstractNIHostInterop(int deviceId, String deviceSerial, IHost host) throws IOException {
+		this.deviceId = deviceId;
+		this.host = host;
+		
+		deviceSerial = (deviceSerial == null) ? "" : deviceSerial;
+		this.isGlobalConnection = deviceSerial.isEmpty();
+
+		// Convert the device's name into an ASCII string.
+		this.deviceSerialBytes = Charset.forName("ASCII").encode(deviceSerial);
+		this.bootstrapConnections();
+	}
+
+
+	/**
 	 * Factory method that creates the HostInterop for the relevant platform.
 	 *
 	 * @param deviceId The ID number (same as the USB PID) of the releveant device type.
 	 * @param serial The serial of the device to connect to, or an empty string for a non-device-specific connection.
 	 */
 	public static AbstractNIHostInterop createInterop(int deviceId, String deviceSerial) throws IOException {
+		return createInterop(deviceId, deviceSerial, null);
+	}
+
+	/**
+	 * Factory method that creates the HostInterop for the relevant platform.
+	 *
+	 * @param deviceId The ID number (same as the USB PID) of the releveant device type.
+	 * @param serial The serial of the device to connect to, or an empty string for a non-device-specific connection.
+	 */
+	public static AbstractNIHostInterop createInterop(int deviceId, String deviceSerial, IHost host) throws IOException {
 		AbstractNIHostInterop interop = null;
+		deviceSerial = (deviceSerial == null) ? "" : deviceSerial;
 
 		// If we're looking for a per-device connection, but we don't yet have a global one, open one first.
 		if (!deviceSerial.isEmpty() && !AbstractNIHostInterop.globalNIConnections.containsKey(Integer.valueOf(deviceId))) {
-			AbstractNIHostInterop.createInterop(deviceId, "");
+			AbstractNIHostInterop.createInterop(deviceId, "", host);
 		}
 
 		// If we're looking for a global connection, and we already have one, short circuit the creation process.
@@ -120,12 +154,12 @@ public abstract class AbstractNIHostInterop {
 		switch (OperatingSystem.get()) {
 			case MAC:
 			case MAC_ARM:
-				interop = new MacOSNIHostInterop(deviceId, deviceSerial);
+				interop = new MacOSNIHostInterop(deviceId, deviceSerial, host);
 				break;
 
 			// FIXME: implement the Windows version of this
 			case  WINDOWS:
-				interop = null;
+				interop = new WindowsNIHostInterop(deviceId, deviceSerial, host);
 				break;
 
 			// We can't communicate with the NIHostIntegrationAgent on other platforms,
@@ -157,6 +191,11 @@ public abstract class AbstractNIHostInterop {
 		this.host.println(String.format(message, toFormat));
 	}
 
+	
+	/**
+	 * Bootstraps a per-device or per-device-type ("global") connection to the NIHostIntegrationAgent.
+	 */
+	abstract void bootstrapConnections() throws IOException;
 
 	/**
 	 * @return True iff this connection can be used for sending display data.
@@ -179,5 +218,52 @@ public abstract class AbstractNIHostInterop {
 	 * @return The raw data received as a response; or a 0-byte array if no response was recevied.
 	 */
 	abstract public byte [] sendRequest(byte [] message);
+
+
+	/** 
+	 * Acknowledges a connection by returning the name of the notification port.
+	 */
+	protected void subscribeToNotifications(String notificationPortName) throws IOException {
+
+		// First, encode the notificationPortName in ASCII.
+		ByteBuffer notificationPortAscii = Charset.forName("ASCII").encode(notificationPortName);
+		byte[] notificationPortEncoded = notificationPortAscii.array();
+
+		// Build the message we'll use.
+		byte [] rawMessage  = new byte[NI_MSG_ACKNOLWEDGE_NOTIFICATION_PORT_LENGTH + notificationPortEncoded.length + 1];
+		ByteBuffer messageBuffer = ByteBuffer.allocateDirect(NI_MSG_ACKNOLWEDGE_NOTIFICATION_PORT_LENGTH + notificationPortEncoded.length + 1);
+		messageBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+		messageBuffer.putInt(NI_MSG_ACKNOLWEDGE_NOTIFICATION_PORT);  // The message type.
+		messageBuffer.putInt(NI_SUCCESS);                            // Success, since we're ACK'ing.
+		messageBuffer.putInt(0);                                     // Padding.
+		messageBuffer.putInt(notificationPortEncoded.length);        // The length of the port name that follows.
+		messageBuffer.put(notificationPortEncoded);                  // Notification port we're getting.
+		messageBuffer.put((byte)0);                                  // Null terminator.
+
+		// Ensure we have a byte array.
+		messageBuffer.rewind();
+		messageBuffer.get(rawMessage);
+
+		// ... and perform our exchange.
+		byte[] result = this.sendRequest(rawMessage);
+		if (!this.responseWasSuccess(result)) {
+			throw new IOException("NIHostIntegrationAgent did not accept our notification socket.");
+		} 
+
+		// Special case: if this is a global connection, request our machine state.
+		// This seems necessary to get the NIHostIntegrationAgent to talk to individual devices (?).
+		if (this.isGlobalConnection) {
+			this.pushRequest(NI_WHOLE_MSG_GET_DEVICE_STATE);		
+		}
+	}
+
+	/** Returns true iff the given response was the NI string 'true'. */
+	private boolean responseWasSuccess(byte[] result) {
+		ByteBuffer resultParser = ByteBuffer.wrap(result);
+		resultParser.order(ByteOrder.LITTLE_ENDIAN);
+
+		return (resultParser.getInt() == NI_SUCCESS);
+	}
 
 }

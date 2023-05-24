@@ -21,11 +21,15 @@ import com.sun.jna.ptr.*;
 /** {@inheritDocs} */
 public class MacOSNIHostInterop extends AbstractNIHostInterop {
 
-	/** The well-known mach port we'll use to communicate with the NIHostIntegrationAgent. */
-	private final static String NI_BOOTSTRAP_PORT = "com.native-instruments.NIHostIntegrationAgent";
-
-	/** True iff this is a 'global' connection, rather than a per-device one. */
-	private final boolean isGlobalConnection;
+	/**
+	 * Creates a new interface for connecting to the NIHostIntegrationAgent.
+	 *
+	 * @param The DeviceID for the relevant NI device.
+	 * @param The device's serial; or null / empty string for an non-device-specific connection.
+	 */
+	public MacOSNIHostInterop(int deviceId, String deviceSerial, IHost host) throws IOException {
+		super(deviceId, deviceSerial, host);
+	}
 
 	/** The port we'll use to send requests to the NIHostIntegrationAgent. */
 	private CFMessagePort requestPort;
@@ -33,15 +37,6 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	/** The notification port on which we'll receive updates from the NIHostIntegrationAgent. Unused, currently. */
 	private CFMessagePort notificationPort;
 
-
-	public MacOSNIHostInterop(int deviceId, String deviceSerial) throws IOException {
-		this.deviceId = deviceId;
-		this.isGlobalConnection = deviceSerial.isEmpty();
-
-		// Convert the device's name into an ASCII string.
-		this.deviceSerialBytes = Charset.forName("ASCII").encode(deviceSerial);
-		this.bootstrapConnections();
-	}
 
 	/**
 	 * Connects to our NIHostIntegrationAgent port we'll use for bootstrapping.
@@ -67,7 +62,7 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	/**
 	 * Bootstraps a per-device connection to the NIHostIntegrationAgent.
 	 */
-	private void bootstrapConnections() throws IOException {
+	protected void bootstrapConnections() throws IOException {
 		byte[] deviceSerial = this.deviceSerialBytes.array();
 
 		// Create a bootstrap port connection, which we'll use to send a handshake.
@@ -136,42 +131,6 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 		//this.subscribeToNotifications(notificationPortName);
 	}
 
-	/** 
-	 * Acknowledges a connection by returning the name of the notification port.
-	 */
-	private void subscribeToNotifications(String notificationPortName) throws IOException {
-		// First, encode the notificationPortName in ASCII.
-		ByteBuffer notificationPortAscii = Charset.forName("ASCII").encode(notificationPortName);
-		byte[] notificationPortEncoded = notificationPortAscii.array();
-
-		// Build the message we'll use.
-		byte [] rawMessage  = new byte[NI_MSG_ACKNOLWEDGE_NOTIFICATION_PORT_LENGTH + notificationPortEncoded.length + 1];
-		ByteBuffer messageBuffer = ByteBuffer.allocateDirect(NI_MSG_ACKNOLWEDGE_NOTIFICATION_PORT_LENGTH + notificationPortEncoded.length + 1);
-		messageBuffer.order(ByteOrder.LITTLE_ENDIAN);
-
-		messageBuffer.putInt(NI_MSG_ACKNOLWEDGE_NOTIFICATION_PORT);  // The message type.
-		messageBuffer.putInt(NI_SUCCESS);                            // Success, since we're ACK'ing.
-		messageBuffer.putInt(0);                                     // Padding.
-		messageBuffer.putInt(notificationPortEncoded.length);        // The length of the port name that follows.
-		messageBuffer.put(notificationPortEncoded);                  // Notification port we're getting.
-		messageBuffer.put((byte)0);                                  // Null terminator.
-
-		// Ensure we have a byte array.
-		messageBuffer.rewind();
-		messageBuffer.get(rawMessage);
-
-		// ... and perform our exchange.
-		byte[] result = this.sendRequest(rawMessage);
-		if (!this.responseWasSuccess(result)) {
-			throw new IOException("NIHostIntegrationAgent did not accept our notification socket.");
-		} 
-
-		// Special case: if this is a global connection, request our machine state.
-		// This seems necessary to get the NIHostIntegrationAgent to talk to individual devices (?).
-		if (this.isGlobalConnection) {
-			this.pushRequest(NI_WHOLE_MSG_GET_DEVICE_STATE);		
-		}
-	}
 
 	/** {@inheritDocs} */
 	@Override
@@ -204,14 +163,6 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	//
 	// Low-level helpers.
 	//
-	
-	private boolean responseWasSuccess(byte[] result) {
-		ByteBuffer resultParser = ByteBuffer.wrap(result);
-		resultParser.order(ByteOrder.LITTLE_ENDIAN);
-
-		return (resultParser.getInt() == NI_SUCCESS);
-	}
-	
 
 	/**
 	 * Sends simple data on a mach port, and receive the response.

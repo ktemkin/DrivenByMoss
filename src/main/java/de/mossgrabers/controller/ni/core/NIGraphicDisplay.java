@@ -197,7 +197,7 @@ public class NIGraphicDisplay extends AbstractGraphicDisplay
 		this.executor = Executors.newSingleThreadScheduledExecutor();
 
 		// Create a connection to the NIHostIntegrationAgent, which actually performs the display scanout.
-		this.niConnection = AbstractNIHostInterop.createInterop(deviceId, deviceSerial);
+		this.niConnection = AbstractNIHostInterop.createInterop(deviceId, deviceSerial, host);
 		this.fillInHeaderAndFooter();
     }
 
@@ -231,8 +231,6 @@ public class NIGraphicDisplay extends AbstractGraphicDisplay
         this.host.showNotification (message);
         this.setNotificationMessage (message);
     }
-
-
 
 
     /** {@inheritDoc} */

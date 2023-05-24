@@ -324,7 +324,12 @@ public abstract class AbstractControlSurface<C extends Configuration> implements
     @Override
     public IGraphicDisplay getGraphicsDisplay ()
     {
-        return this.getGraphicsDisplay (0);
+		try {
+			return this.getGraphicsDisplay (0);
+		}
+		catch (IndexOutOfBoundsException ex) {
+			return null;
+		}
     }
 
 

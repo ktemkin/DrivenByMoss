@@ -247,6 +247,7 @@ public class MaschineControllerSetup extends AbstractControllerSetup<MaschineCon
 				} 
 				catch (IOException ex) {
 					this.host.error("Couldn't create NI service connection. Falling back to MCU display.");
+					this.host.error(ex.toString());
 					// If we can't create a graphics display, don't panic: we'll fall back to MCU display.
 				}
 			}
