@@ -117,6 +117,23 @@ public interface IGraphicsContext
     void fillCircle (double x, double y, double radius, ColorEx fillColor);
 
 
+	/**
+	 * Draw a stroked arc. 
+	 * Angles are expressed in radians; 0 is due right, 1/2 pi is down; pi is due left, and 3/4 (or -1/2 pi) is up.
+	 *
+	 * @param x The X coordinate of the circle's center.
+	 * @param y The Y coordinate of the circle's center.
+	 * @param radius The radius of the circle this arc should be taken from.
+	 * @param startAngle The starting angle for the arc, in radians.
+	 * @param endAngle The finishing angle for the arc, in radians.
+	 * @param flipped True to flip which section of the arc is filled.
+	 * @param lineWidth The stroke width for the arc.
+	 * @param strokeColor The stroke color for the arc.
+	 *
+	 */
+    public void drawArc (final double x, final double y, final double radius, final double startAngle, final double finishAngle, boolean flipped, final double lineWidth, final ColorEx strokeColor);
+
+
     /**
      * Draws a text centered into a height (horizontally). The text is not clipped.
      *

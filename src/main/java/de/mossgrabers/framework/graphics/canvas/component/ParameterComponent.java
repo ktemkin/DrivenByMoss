@@ -7,6 +7,7 @@ package de.mossgrabers.framework.graphics.canvas.component;
 import de.mossgrabers.framework.controller.color.ColorEx;
 import de.mossgrabers.framework.daw.resource.ChannelType;
 import de.mossgrabers.framework.daw.resource.DeviceTypes;
+import de.mossgrabers.framework.daw.resource.ResourceHandler;
 import de.mossgrabers.framework.graphics.Align;
 import de.mossgrabers.framework.graphics.IGraphicsConfiguration;
 import de.mossgrabers.framework.graphics.IGraphicsContext;
@@ -156,34 +157,43 @@ public class ParameterComponent extends MenuComponent
         if (this.paramName == null || this.paramName.length () == 0)
             return;
 
-        final double elementWidth = width - 2 * inset;
-        final double elementHeight = (trackRowTop - controlsTop - inset) / 3;
-
-        // Draw the background
-        final ColorEx backgroundColor = configuration.getColorBackground ();
-        gc.fillRectangle (left, menuHeight + 1, width, trackRowTop - (isValueMissing ? controlsTop + elementHeight : menuHeight + 1), this.isTouched ? configuration.getColorBackgroundLighter () : backgroundColor);
+        final double elementWidth = width - inset * 0.5; 
+        final double elementHeight = (trackRowTop - controlsTop - inset) / 4;
 
         // Draw the name and value texts
         final ColorEx textColor = configuration.getColorText ();
         final double fontSize = elementHeight * 2 / 3;
-        gc.drawTextInBounds (this.paramName, left + inset - 1, controlsTop - inset, elementWidth, elementHeight, Align.CENTER, textColor, fontSize);
-        gc.drawTextInBounds (this.paramValueText, left + inset - 1, controlsTop - inset + elementHeight, elementWidth, elementHeight, Align.CENTER, textColor, fontSize);
+		final double halfInset = inset * 0.5;
+        gc.drawTextInBounds (this.paramValueText, left + inset - 1, controlsTop - halfInset, elementWidth, elementHeight, Align.CENTER, textColor, fontSize * info.getFontScalingFactor() * 1.4);
+        gc.drawTextInBounds (this.paramName, left + inset - 1, controlsTop + halfInset + elementHeight * 3, elementWidth, elementHeight, Align.CENTER, textColor, fontSize * info.getFontScalingFactor());
 
-        // Value slider
+        // Value knob
         if (isValueMissing)
             return;
         final double elementInnerWidth = elementWidth - 2;
         final double maxValue = dimensions.getParameterUpperBound ();
         final double value = isModulated ? this.modulatedParamValue : this.paramValue;
-        final double valueSliderWidth = value >= maxValue - 1 ? elementInnerWidth : elementInnerWidth * value / maxValue;
-        final double innerTop = controlsTop + 2 * elementHeight + 1;
-        final ColorEx borderColor = configuration.getColorBorder ();
-        gc.fillRectangle (left + inset - 1, controlsTop + 2 * elementHeight, elementWidth, elementHeight, borderColor);
-        gc.fillRectangle (left + inset, innerTop, valueSliderWidth, elementHeight - 2, configuration.getColorFader ());
+        final double innerTop = controlsTop + elementHeight + 1;
 
-        final double w = this.isTouched ? 3 : 1;
-        final double valueWidth = this.paramValue >= maxValue - 1 ? elementInnerWidth : elementInnerWidth * this.paramValue / maxValue;
-        gc.fillRectangle (left + inset + Math.max (0, valueWidth - w), innerTop, w, elementHeight - 2, configuration.getColorEdit ());
+		final double arcWidthUnfilled = dimensions.getInset() * 0.6;
+		final double arcWidthFilled   = dimensions.getInset() * 0.8;
+
+		final double radius  = Math.min(elementWidth, elementHeight);
+		final double centerX = left + (elementWidth / 2) + inset;
+		final double centerY = innerTop + (elementHeight / 2) + (inset * 1.5);
+
+		// Our start and end angles for the whole fader.
+		final double unfilledStartAngleRadians  = 70   * (Math.PI / 180);
+		final double endAngleRadians            = 110  * (Math.PI / 180);
+
+		// The start and end angles for the filled section.
+		final double filledArcDegrees           = (value / maxValue) * 320;
+		final double filledAngleDegrees         = filledArcDegrees - 180 - 70;
+		final double filledStartAngleRadians    = filledAngleDegrees * (Math.PI / 180);
+
+		// Draw the knob-style fader.
+		gc.drawArc(centerX, centerY, radius, unfilledStartAngleRadians, endAngleRadians, true, arcWidthUnfilled, configuration.getColorFader());
+		gc.drawArc(centerX, centerY, radius, filledStartAngleRadians,   endAngleRadians, true, arcWidthFilled, isTouched ? ColorEx.brighter(configuration.getColorEdit()) : configuration.getColorEdit());
     }
 
 

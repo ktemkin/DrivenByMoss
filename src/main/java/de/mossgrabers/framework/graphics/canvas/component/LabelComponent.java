@@ -153,12 +153,12 @@ public class LabelComponent implements IComponent
             final IImage image = ResourceHandler.getSVGImage (iconName);
             final ColorEx maskColor = this.modifyIfOff (this.getMaskColor (configuration));
             if (maskColor == null)
-                gc.drawImage (image, left + (doubleUnit - image.getWidth ()) / 2, textTop + (trackRowHeight - image.getHeight ()) / 2.0);
+                gc.drawImage (image, left + (unit - image.getWidth ()) / 2, textTop + (trackRowHeight - image.getHeight ()) / 2.0);
             else
-                gc.maskImage (image, left + (doubleUnit - image.getWidth ()) / 2, textTop + (trackRowHeight - image.getHeight ()) / 2.0, maskColor);
+                gc.maskImage (image, left + (unit - image.getWidth ()) / 2, textTop + (trackRowHeight - image.getHeight ()) / 2.0, maskColor);
         }
 
-        gc.drawTextInBounds (this.text, left + doubleUnit, textTop, width - doubleUnit, trackRowHeight, Align.LEFT, this.modifyIfOff (configuration.getColorText ()), 1.2 * unit * info.getFontScalingFactor());
+        gc.drawTextInBounds (this.text, left + unit, textTop, width - unit, trackRowHeight, Align.CENTER, this.modifyIfOff (configuration.getColorText ()), 1.2 * unit * info.getFontScalingFactor());
 
         // The track color section
         final ColorEx infoColor = this.backgroundColor;

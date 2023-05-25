@@ -129,6 +129,7 @@ public class MaschineParametersMode extends SelectedDeviceMode<MaschineControlSu
         final int selectedPage = parameterPageBank.getSelectedItemIndex ();
         final boolean hasPinning = this.model.getHost ().supports (Capability.HAS_PINNING);
         final IValueChanger valueChanger = this.model.getValueChanger ();
+
         for (int i = 0; i < parameterBank.getPageSize (); i++)
         {
             final boolean isTopMenuOn = this.getTopMenuEnablement (cd, hasPinning, i);

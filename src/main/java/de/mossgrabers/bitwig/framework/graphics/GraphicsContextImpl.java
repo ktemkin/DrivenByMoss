@@ -115,7 +115,6 @@ public class GraphicsContextImpl implements IGraphicsContext
         this.gc.fill ();
     }
 
-
     /** {@inheritDoc} */
     @Override
     public void fillTriangle (final double x1, final double y1, final double x2, final double y2, final double x3, final double y3, final ColorEx fillColor)
@@ -149,6 +148,22 @@ public class GraphicsContextImpl implements IGraphicsContext
         this.setColor (fillColor);
         this.gc.circle (x, y, Math.max (0, radius));
         this.gc.fill ();
+    }
+
+
+    /** {@inheritDoc} */
+    @Override
+    public void drawArc (final double x, final double y, final double radius, final double startAngle, final double finishAngle, boolean flip, final double lineWidth, final ColorEx strokeColor)
+    {
+        this.setColor (strokeColor);
+		this.gc.newPath();
+        this.gc.setLineWidth (lineWidth);
+		if (flip) {
+			this.gc.arcNegative(x, y, radius, startAngle, finishAngle);
+		} else {
+			this.gc.arc(x, y, radius, startAngle, finishAngle);
+		}
+        this.gc.stroke ();
     }
 
 
