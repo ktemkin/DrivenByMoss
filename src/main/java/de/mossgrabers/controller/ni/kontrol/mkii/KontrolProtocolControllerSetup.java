@@ -4,12 +4,16 @@
 
 package de.mossgrabers.controller.ni.kontrol.mkii;
 
+import de.mossgrabers.controller.mackie.mcu.controller.MCUDisplay;
+import de.mossgrabers.controller.ni.core.AbstractNIHostInterop;
+import de.mossgrabers.controller.ni.core.NIGraphicDisplay;
 import de.mossgrabers.controller.ni.kontrol.mkii.command.trigger.StartClipOrSceneCommand;
 import de.mossgrabers.controller.ni.kontrol.mkii.controller.KontrolProtocolColorManager;
 import de.mossgrabers.controller.ni.kontrol.mkii.controller.KontrolProtocolControlSurface;
 import de.mossgrabers.controller.ni.kontrol.mkii.mode.MixerMode;
 import de.mossgrabers.controller.ni.kontrol.mkii.mode.ParamsMode;
 import de.mossgrabers.controller.ni.kontrol.mkii.mode.SendMode;
+import de.mossgrabers.controller.ni.kontrol.mkii.mode.VolumeMode;
 import de.mossgrabers.controller.ni.kontrol.mkii.view.ControlView;
 import de.mossgrabers.framework.command.core.NopCommand;
 import de.mossgrabers.framework.command.core.TriggerCommand;
@@ -62,6 +66,7 @@ import de.mossgrabers.framework.utils.LatestTaskExecutor;
 import de.mossgrabers.framework.utils.OperatingSystem;
 import de.mossgrabers.framework.view.Views;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
@@ -72,14 +77,20 @@ import java.util.function.IntSupplier;
  * Setup for the Komplete Kontrol NIHIA protocol.
  *
  * @author Jürgen Moßgraber
+ * @author Kate Temkin
  */
 public class KontrolProtocolControllerSetup extends AbstractControllerSetup<KontrolProtocolControlSurface, KontrolProtocolConfiguration>
 {
+	// TODO(ktemkin): check to see if these are the same across the other models?
+	private static final int   DEVICE_ID  = 0x1610;
+
     private final int          version;
+
     private String             kompleteInstance   = "";
     private Object             navigateLock       = new Object ();
     private LatestTaskExecutor slotScrollExecutor = new LatestTaskExecutor ();
     private long               lastEdit;
+
 
 
     /**
@@ -99,6 +110,13 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         this.colorManager = new KontrolProtocolColorManager ();
         this.valueChanger = new TwosComplementValueChanger (1024, 4);
         this.configuration = new KontrolProtocolConfiguration (host, this.valueChanger, factory.getArpeggiatorModes ());
+
+		// Create a global NI host interop in the background.
+		// We don't need to hold on to this -- just having it created once is enough to allow serial autodetection to work later.
+		try {
+			AbstractNIHostInterop.createInterop(DEVICE_ID, "");
+		} catch(IOException ex) {}
+
     }
 
 
@@ -171,6 +189,48 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         this.surfaces.add (surface);
 
         surface.addPianoKeyboard (49, pianoInput, true);
+	
+		try {
+			// Currently, if there's more than one of the same device connected, the NIServices
+			// always just return information about the first one. We _should_ be able to work around that by
+			// fetching the USB serial number, but this requires us to match to the USB device, even if we don't
+			// open it. That seems messy, but that may be necessary.
+			//
+			// For now, we'll just let the user specify which serial they want to talk to in settings.
+			// If they don't provide one, we'll try to figure out what serial is around.
+			//
+			String serial = this.configuration.getSerialForDisplay();
+
+			// If we have a single device of this type, just use it.
+			if ((serial == null) || serial.isEmpty()) {
+				serial = AbstractNIHostInterop.getSingleDeviceSerial(DEVICE_ID);
+				if (serial != null) {
+					this.host.println("Auto-detected serial " + serial + ".");
+				}
+			}
+
+			if ((serial != null) && !serial.isEmpty()) {
+				final var nihiaConnection = AbstractNIHostInterop.createInterop(DEVICE_ID, serial, surface, host);
+				final NIGraphicDisplay display = new NIGraphicDisplay(this.host, this.valueChanger.getUpperBound(), this.configuration, nihiaConnection);
+				surface.addGraphicsDisplay(display);
+
+				this.host.println("Graphics display set up on Kontrol with serial " + serial + ".");
+			} else {
+				this.host.error("Couldn't auto-detect the device serial corresponding to this controller. Try providing it in settings.");
+			}
+		} 
+		catch (IOException ex) {
+			this.host.error("Couldn't create NI service connection. Falling back to MCU display.");
+			this.host.error(ex.toString());
+			// If we can't create a graphics display, don't panic: we'll fall back to MCU display.
+		}
+
+		// If we don't have a grahpic display, but we can create an MCU text one, do so.
+		if ((surface.getGraphicsDisplay() == null)) {
+			final MCUDisplay display = new MCUDisplay (this.host, output, true, false, false);
+			display.setCenterNotification (false);
+			surface.addTextDisplay (display);
+		}
     }
 
 
@@ -211,9 +271,12 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         final List<ContinuousID> controls = ContinuousID.createSequentialList (ContinuousID.KNOB1, 8);
         controls.addAll (ContinuousID.createSequentialList (ContinuousID.FADER1, 8));
 
-        modeManager.register (Modes.VOLUME, new MixerMode (surface, this.model, controls));
-        modeManager.register (Modes.SEND, new SendMode (surface, this.model, controls));
-        modeManager.register (Modes.DEVICE_PARAMS, new ParamsMode (surface, this.model, controls));
+        modeManager.register (Modes.VOLUME, new VolumeMode (surface, this.model));
+        modeManager.register (Modes.DEVICE_PARAMS, new ParamsMode (surface, this.model));
+
+		// FIXME: register modes for the various sends
+        modeManager.register (Modes.SEND, new SendMode (0, surface, this.model));
+
     }
 
 
@@ -653,8 +716,9 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
 
     private int getKnobValue (final int continuousMidiControl)
     {
-        final IMode mode = this.getSurface ().getModeManager ().getActive ();
-        return mode == null ? 0 : Math.max (0, mode.getKnobValue (continuousMidiControl));
+		return 0; // XXX
+        //final IMode mode = this.getSurface ().getModeManager ().getActive ();
+        //return mode == null ? 0 : Math.max (0, mode.getKnobValue (continuousMidiControl));
     }
 
 

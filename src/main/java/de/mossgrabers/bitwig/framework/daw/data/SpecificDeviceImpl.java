@@ -64,7 +64,7 @@ public class SpecificDeviceImpl extends DeviceImpl implements ISpecificDevice
 
         final int checkedNumDevices = numDevicesInBank >= 0 ? numDevicesInBank : 8;
         final int checkedNumParamPages = numParamPages >= 0 ? numParamPages : 8;
-        final int checkedNumParams = 8; //numParams >= 0 ? numParams : 8;
+        final int checkedNumParams = numParams >= 0 ? numParams : 8;
         final int checkedNumDeviceLayers = numDeviceLayers >= 0 ? numDeviceLayers : 8;
         final int checkedNumDrumPadLayers = numDrumPadLayers >= 0 ? numDrumPadLayers : 16;
 

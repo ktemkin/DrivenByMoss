@@ -6,12 +6,16 @@ package de.mossgrabers.controller.ni.kontrol.mkii.controller;
 
 import de.mossgrabers.controller.ni.kontrol.mkii.KontrolProtocolConfiguration;
 import de.mossgrabers.controller.ni.kontrol.mkii.TrackType;
+import de.mossgrabers.controller.ni.core.INIEventHandler;
 import de.mossgrabers.framework.controller.AbstractControlSurface;
+import de.mossgrabers.framework.controller.ButtonID;
+import de.mossgrabers.framework.controller.ContinuousID;
 import de.mossgrabers.framework.controller.color.ColorManager;
 import de.mossgrabers.framework.controller.hardware.BindType;
 import de.mossgrabers.framework.daw.IHost;
 import de.mossgrabers.framework.daw.midi.IMidiInput;
 import de.mossgrabers.framework.daw.midi.IMidiOutput;
+import de.mossgrabers.framework.utils.ButtonEvent;
 import de.mossgrabers.framework.utils.StringUtils;
 
 import java.util.ArrayList;
@@ -22,9 +26,10 @@ import java.util.List;
 /**
  * The Komplete Kontrol MkII control surface.
  *
+ * @author Kate Temkin
  * @author Jürgen Moßgraber
  */
-public class KontrolProtocolControlSurface extends AbstractControlSurface<KontrolProtocolConfiguration>
+public class KontrolProtocolControlSurface extends AbstractControlSurface<KontrolProtocolConfiguration> implements INIEventHandler
 {
     /** Command to initialize the protocol handshake (and acknowledge). */
     public static final int  CMD_HELLO                            = 0x01;
@@ -316,6 +321,21 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
     {
         this.protocolVersion = protocolVersion;
     }
+
+
+	/** {@inheritDocs} */
+	@Override
+	public void handleButtonEvent(int rawButtonId, ButtonEvent event) {
+		// TODO Auto-generated method stub
+	}
+
+
+	/** {@inheritDocs} */
+	@Override
+	public void handleContinuousEvent(int rawContinuousId, int newValue) {
+		// TODO Auto-generated method stub
+		
+	}
 
 
     /**

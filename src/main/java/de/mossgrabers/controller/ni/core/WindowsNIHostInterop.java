@@ -35,8 +35,8 @@ public class WindowsNIHostInterop extends AbstractNIHostInterop {
 	 * @param The DeviceID for the relevant NI device.
 	 * @param The device's serial; or null / empty string for an non-device-specific connection.
 	 */
-	public WindowsNIHostInterop(int deviceId, String deviceSerial, IHost host) throws IOException {
-		super(deviceId, deviceSerial, host);
+	public WindowsNIHostInterop(int deviceId, String deviceSerial, INIEventHandler eventHandler, IHost host) throws IOException {
+		super(deviceId, deviceSerial, eventHandler, host);
 	}
 
 	/**
@@ -248,6 +248,11 @@ public class WindowsNIHostInterop extends AbstractNIHostInterop {
 		}
 
 		return Arrays.copyOfRange(response, 0, bytesRead.getValue());
+	}
+
+	@Override
+	void pollForNotifications() {
+		// FIXME(ktemkin): implement our server for Windows
 	}
 
 }

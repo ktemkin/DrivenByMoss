@@ -189,7 +189,9 @@ public class NIGraphicDisplay extends AbstractGraphicDisplay
      *
      * @param host The host
      * @param maxParameterValue The maximum parameter value (upper bound)
-     * @param configuration The Maschine configuration
+     * @param configuration The controller's configuration
+	 * @param int deviceId The device type; used to create a new NIHIA interop.
+	 * @param int deviceId The device's serial; used to create a new NIHIA interop.
      */
     public NIGraphicDisplay (final IHost host, final int maxParameterValue, final IGraphicsConfiguration configuration, int deviceId, String deviceSerial) throws IOException
     {
@@ -198,6 +200,25 @@ public class NIGraphicDisplay extends AbstractGraphicDisplay
 
 		// Create a connection to the NIHostIntegrationAgent, which actually performs the display scanout.
 		this.niConnection = AbstractNIHostInterop.createInterop(deviceId, deviceSerial, host);
+		this.fillInHeaderAndFooter();
+    }
+
+
+    /**
+     * Constructor. A virtual LCD display of 960x272 pixels spread across two actual 480-pixel-wide displays.
+     *
+     * @param host The host
+     * @param maxParameterValue The maximum parameter value (upper bound)
+     * @param configuration The Maschine configuration
+	 * @param interop The NIHIA interop used for communication with the device.
+     */
+    public NIGraphicDisplay (final IHost host, final int maxParameterValue, final IGraphicsConfiguration configuration, AbstractNIHostInterop interop)
+    {
+        super (host, configuration, new DefaultGraphicsDimensions (480 * 2, 272, maxParameterValue), "NI Device Display", true, 0.7);
+		this.executor = Executors.newSingleThreadScheduledExecutor();
+
+		// Create a connection to the NIHostIntegrationAgent, which actually performs the display scanout.
+		this.niConnection = interop;
 		this.fillInHeaderAndFooter();
     }
 
@@ -325,6 +346,7 @@ public class NIGraphicDisplay extends AbstractGraphicDisplay
 			// Update our displays.
             this.niConnection.pushRequest (this.byteStoreLeft);
             this.niConnection.pushRequest (this.byteStoreRight);
+			this.niConnection.requestFocus();
         }
     }
 

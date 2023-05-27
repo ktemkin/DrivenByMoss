@@ -4,103 +4,49 @@
 
 package de.mossgrabers.controller.ni.kontrol.mkii.mode;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import de.mossgrabers.controller.ni.kontrol.mkii.KontrolProtocolConfiguration;
-import de.mossgrabers.controller.ni.kontrol.mkii.TrackType;
-import de.mossgrabers.controller.ni.kontrol.mkii.controller.KontrolProtocol;
 import de.mossgrabers.controller.ni.kontrol.mkii.controller.KontrolProtocolControlSurface;
-import de.mossgrabers.framework.controller.ContinuousID;
+import de.mossgrabers.framework.controller.display.IGraphicDisplay;
+import de.mossgrabers.framework.controller.display.ITextDisplay;
 import de.mossgrabers.framework.controller.valuechanger.IValueChanger;
 import de.mossgrabers.framework.daw.IModel;
 import de.mossgrabers.framework.daw.data.ISend;
 import de.mossgrabers.framework.daw.data.ITrack;
 import de.mossgrabers.framework.daw.data.bank.ISendBank;
-import de.mossgrabers.framework.daw.data.empty.EmptySend;
-import de.mossgrabers.framework.mode.track.DefaultTrackMode;
-import de.mossgrabers.framework.parameterprovider.special.CombinedParameterProvider;
-import de.mossgrabers.framework.parameterprovider.track.SendParameterProvider;
-
-import java.util.List;
-import java.util.Optional;
+import de.mossgrabers.framework.daw.data.bank.ITrackBank;
+import de.mossgrabers.framework.graphics.canvas.utils.SendData;
+import de.mossgrabers.framework.mode.track.TrackSendMode;
+import de.mossgrabers.framework.utils.Pair;
+import de.mossgrabers.framework.utils.StringUtils;
 
 
 /**
- * The send mode.
+ * Mode for editing a send volume parameter of all tracks.
  *
+ * @author Kate Temkin
  * @author Jürgen Moßgraber
  */
-public class SendMode extends DefaultTrackMode<KontrolProtocolControlSurface, KontrolProtocolConfiguration>
+public class SendMode extends TrackSendMode<KontrolProtocolControlSurface, KontrolProtocolConfiguration> implements IKontrolTrackMode
 {
+    protected final List<Pair<String, Boolean>> menu = new ArrayList<> ();
+
     /**
      * Constructor.
      *
+     * @param sendIndex The send index
      * @param surface The control surface
      * @param model The model
-     * @param controls The IDs of the knobs or faders to control this mode
      */
-    public SendMode (final KontrolProtocolControlSurface surface, final IModel model, final List<ContinuousID> controls)
+    public SendMode (final int sendIndex, final KontrolProtocolControlSurface surface, final IModel model)
     {
-        super ("Send", surface, model, false);
+        super (sendIndex, surface, model, false, DEFAULT_KNOB_IDS);
 
-        this.setControls (controls);
-        final SendParameterProvider pp = new SendParameterProvider (model, -1, 0);
-        this.setParameterProvider (new CombinedParameterProvider (pp, pp));
-
-        model.getTrackBank ().addSelectionObserver ( (index, isSelected) -> this.parametersAdjusted ());
-    }
-
-
-    /** {@inheritDoc} */
-    @Override
-    public void onKnobValue (final int index, final int value)
-    {
-        final Optional<ITrack> track = this.model.getCurrentTrackBank ().getSelectedItem ();
-        if (track.isEmpty ())
-            return;
-        final ISend send = track.get ().getSendBank ().getItem (index);
-        if (this.isAbsolute)
-            send.setValue (value);
-        else
-            send.changeValue (value);
-    }
-
-
-    /** {@inheritDoc} */
-    @Override
-    public int getKnobValue (final int index)
-    {
-        // Note: Since we need multiple value (more than 8), index is the MIDI CC of the knob
-
-        final IValueChanger valueChanger = this.model.getValueChanger ();
-        final Optional<ITrack> selectedTrack = this.bank.getSelectedItem ();
-        final ISendBank sendBank = selectedTrack.isEmpty () ? null : selectedTrack.get ().getSendBank ();
-
-        if (index >= KontrolProtocolControlSurface.KONTROL_TRACK_VOLUME && index < KontrolProtocolControlSurface.KONTROL_TRACK_VOLUME + 8)
-        {
-            final ISend send = sendBank == null ? EmptySend.INSTANCE : sendBank.getItem (index - KontrolProtocolControlSurface.KONTROL_TRACK_VOLUME);
-            return valueChanger.toMidiValue (send.getValue ());
-        }
-
-        if (index >= KontrolProtocolControlSurface.KONTROL_TRACK_PAN && index < KontrolProtocolControlSurface.KONTROL_TRACK_PAN + 8)
-        {
-            final ISend send = sendBank == null ? EmptySend.INSTANCE : sendBank.getItem (index - KontrolProtocolControlSurface.KONTROL_TRACK_PAN);
-            return valueChanger.toMidiValue (send.getValue ());
-        }
-
-        final int scrollTracksState = (sendBank != null && sendBank.canScrollPageBackwards () ? 1 : 0) + (sendBank != null && sendBank.canScrollPageForwards () ? 2 : 0);
-        final int scrollScenesState = 0;
-
-        final KontrolProtocolConfiguration configuration = this.surface.getConfiguration ();
-        switch (index)
-        {
-            case KontrolProtocolControlSurface.KONTROL_NAVIGATE_BANKS:
-                return scrollTracksState;
-            case KontrolProtocolControlSurface.KONTROL_NAVIGATE_TRACKS:
-                return configuration.isFlipTrackClipNavigation () ? scrollScenesState : scrollTracksState;
-            case KontrolProtocolControlSurface.KONTROL_NAVIGATE_CLIPS:
-                return configuration.isFlipTrackClipNavigation () ? scrollTracksState : scrollScenesState;
-            default:
-                return 0;
-        }
+        this.initTouchedStates (9);
+        for (int i = 0; i < 8; i++)
+            this.menu.add (new Pair<> (" ", Boolean.FALSE));
     }
 
 
@@ -108,74 +54,77 @@ public class SendMode extends DefaultTrackMode<KontrolProtocolControlSurface, Ko
     @Override
     public void updateDisplay ()
     {
-        final IValueChanger valueChanger = this.model.getValueChanger ();
-        final Optional<ITrack> selectedTrack = this.bank.getSelectedItem ();
-        final ISendBank sendBank = selectedTrack.isEmpty () ? null : selectedTrack.get ().getSendBank ();
+		this.delegatePerDisplayType();
+	}
 
-        final int [] vuData = new int [16];
+
+    /** {@inheritDoc} */
+	@Override
+	public void updateTextDisplay(ITextDisplay d)
+	{
+        final ITrackBank tb = this.model.getCurrentTrackBank ();
         for (int i = 0; i < 8; i++)
         {
-            final ISend send = sendBank == null ? EmptySend.INSTANCE : sendBank.getItem (i);
-
-            this.surface.sendKontrolTrackSysEx (KontrolProtocolControlSurface.KONTROL_TRACK_AVAILABLE, send.doesExist () ? TrackType.RETURN_BUS : TrackType.EMPTY, i);
-            this.surface.sendKontrolTrackSysEx (KontrolProtocolControlSurface.KONTROL_TRACK_SELECTED, send.isSelected () ? 1 : 0, i);
-            this.surface.sendKontrolTrackSysEx (KontrolProtocolControlSurface.KONTROL_TRACK_RECARM, 0, i);
-            this.surface.sendKontrolTrackSysEx (KontrolProtocolControlSurface.KONTROL_TRACK_VOLUME_TEXT, 0, i, send.getDisplayedValue (8));
-            this.surface.sendKontrolTrackSysEx (KontrolProtocolControlSurface.KONTROL_TRACK_PAN_TEXT, 0, i, send.getDisplayedValue (8));
-            final String n = selectedTrack.isPresent () ? this.getLabel (selectedTrack.get (), send) : "";
-            this.surface.sendKontrolTrackSysEx (KontrolProtocolControlSurface.KONTROL_TRACK_NAME, 0, i, n);
-
-            final int j = 2 * i;
-            vuData[j] = valueChanger.toMidiValue (send.getModulatedValue ());
-            vuData[j + 1] = valueChanger.toMidiValue (send.getModulatedValue ());
+            final ITrack t = tb.getItem (i);
+            final ISend send = t.getSendBank ().getItem (this.sendIndex);
+            String name = StringUtils.shortenAndFixASCII (t.getName (), 6);
+            if (t.isSelected ())
+                name = ">" + name;
+            d.setCell (0, i, name);
+            d.setCell (1, i, send.getDisplayedValue (6));
         }
-        this.surface.sendKontrolTrackSysEx (KontrolProtocolControlSurface.KONTROL_TRACK_VU, 2, 0, vuData);
     }
+
+    /** {@inheritDoc} */
+	@Override
+	public void updateGraphicsDisplay(IGraphicDisplay display)
+	{
+        this.updateTrackMenu (5 + this.sendIndex % 4);
+
+        final ITrackBank tb = this.model.getCurrentTrackBank ();
+        final IValueChanger valueChanger = this.model.getValueChanger ();
+
+        for (int i = 0; i < 8; i++)
+        {
+            final ITrack t = tb.getItem (i);
+            final ISendBank sendBank = t.getSendBank ();
+            final SendData [] sendData = new SendData [4];
+            for (int j = 0; j < 4; j++)
+            {
+                final ISend send = sendBank.getItem (j);
+                final boolean exists = send != null && send.doesExist ();
+                sendData[j] = new SendData (send.isEnabled (), exists ? send.getName () : "", exists && this.sendIndex == j && this.isKnobTouched (i) ? send.getDisplayedValue (8) : "", valueChanger.toDisplayValue (exists ? send.getValue () : -1), valueChanger.toDisplayValue (exists ? send.getModulatedValue () : -1), this.sendIndex == j);
+            }
+            final Pair<String, Boolean> pair = this.menu.get (i);
+            display.addSendsElement (pair.getKey (), pair.getValue ().booleanValue (), t.doesExist () ? t.getName () : "", this.updateType (t), t.getColor (), t.isSelected (), sendData, false, t.isActivated (), t.isActivated ());
+        }
+	}
 
 
     /** {@inheritDoc} */
     @Override
-    public void selectPreviousItem ()
+    public void onKnobTouch (final int index, final boolean isTouched)
     {
-        final Optional<ITrack> selectedTrack = this.bank.getSelectedItem ();
-        if (selectedTrack.isPresent ())
-            selectedTrack.get ().getSendBank ().selectPreviousPage ();
+        this.setTouchedKnob (index, isTouched);
+
+        super.onKnobTouch (index == 8 ? -1 : index, isTouched);
     }
 
 
-    /** {@inheritDoc} */
-    @Override
-    public void selectNextItem ()
-    {
-        final Optional<ITrack> selectedTrack = this.bank.getSelectedItem ();
-        if (selectedTrack.isPresent ())
-            selectedTrack.get ().getSendBank ().selectNextPage ();
-    }
+	@Override
+	public KontrolProtocolControlSurface getSurface() {
+		return this.surface;
+	}
 
 
-    /** {@inheritDoc} */
-    @Override
-    public void selectPreviousItemPage ()
-    {
-        this.selectPreviousItem ();
-    }
+	@Override
+	public IModel getModel() {
+		return this.model;
+	}
 
 
-    /** {@inheritDoc} */
-    @Override
-    public void selectNextItemPage ()
-    {
-        this.selectNextItem ();
-    }
-
-
-    private String getLabel (final ITrack track, final ISend send)
-    {
-        final String n = send.doesExist () ? send.getName () : "None";
-
-        if (this.surface.getProtocolVersion () == KontrolProtocol.VERSION_1)
-            return "S" + (send.getPosition () + 1) + ": " + n;
-
-        return "Track " + (track.getPosition () + 1) + "\nFX " + (send.getPosition () + 1) + "\n\n" + n;
-    }
+	@Override
+	public List<Pair<String, Boolean>> getMenu() {
+		return this.menu;
+	}
 }
