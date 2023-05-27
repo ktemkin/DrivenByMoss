@@ -116,6 +116,12 @@ public abstract class AbstractNIHostInterop {
 	/** The message ID for a "please let me have focus" message ('user'). */
 	protected final static byte[] NI_WHOLE_MSG_REQUEST_FOCUS = {0x00, 0x43, 0x43, 0x03, 0x72, 0x65, 0x73, 0x75};
 
+	/** The message ID for a "set our LED colors" message. */
+	protected final static int NI_MSG_SET_LEDS = 0x036c7500;
+
+	/** The message ID for a "set the LEDs on the keybed" message. */
+	protected final static int NI_MSG_CONFIGURE_KEYZONE = 0x0345736b;
+
 	/** The message ID for a "send display data" handshake. 'Dsd' */
 	protected final static int NI_MSG_DISPLAY   = 0x03647344;
 
@@ -325,6 +331,84 @@ public abstract class AbstractNIHostInterop {
 
 
 	/**
+	 * Requests focus from the NIHostIntegrationAgent.
+	 * Used to request that the device display our data, specifically.
+	 */
+	public void requestFocus() {
+		this.pushRequest(NI_WHOLE_MSG_REQUEST_FOCUS);	
+	}
+
+	
+	/**
+	 * Sets the colors of the device's various button LEDs.
+	 */
+	public void setLedColors(byte[] rawLedColors) {
+
+		// Allocate a buffer in which we can build our LED message.
+		byte[] message = new byte[8 + rawLedColors.length];
+		ByteBuffer messageToSend = ByteBuffer.wrap(message);
+		messageToSend.order(ByteOrder.LITTLE_ENDIAN);
+
+		// Add our header, which contains the message ID and the non-header length...
+		messageToSend.putInt(NI_MSG_SET_LEDS);
+		messageToSend.putInt(rawLedColors.length);
+
+		// ... and add in the body of raw LED colors.
+		messageToSend.put(rawLedColors);
+
+		this.sendRequest(messageToSend.array());
+	}
+
+
+	/**
+	 * Sets the colors of the device's keybed LEDs.
+	 *
+	 * @param keyColor The raw keyColor for the device.
+	 */
+	public void configureKeyzones(int keyColor) {
+
+		// Allocate a buffer in which we can build our LED message.
+		byte[] message = new byte[28 * 4];
+		ByteBuffer messageToSend = ByteBuffer.wrap(message);
+		messageToSend.order(ByteOrder.LITTLE_ENDIAN);
+
+		// For now, we'll mostly configure a single region, and just let
+		// ourselve set the color (e.g. in our preferences.)
+		//
+		// In the future, we may want to reverse engineer the keyzone config.
+		messageToSend.putInt(NI_MSG_CONFIGURE_KEYZONE);
+		messageToSend.putInt(0x00000000);
+		messageToSend.putInt(0x00000000);
+		messageToSend.putInt(0x00000060);
+		messageToSend.putInt(0x0000007f);
+		messageToSend.putInt(0x00000050);
+		messageToSend.putInt(0x00000000);
+		messageToSend.putInt(0x00000070);
+		messageToSend.putInt(0x0b000000);
+		messageToSend.putInt(0x7f0b0000);
+		messageToSend.putInt(0x007f0b00);
+		messageToSend.putInt(0x00007f00 | keyColor);
+		messageToSend.putInt(0x7f0b0000);
+		messageToSend.putInt(0x007f0b00);
+		messageToSend.putInt(0x00007f0b);
+		messageToSend.putInt(0x0000007f);
+		messageToSend.putInt(0x007f0b00);
+		messageToSend.putInt(0x00007f0b);
+		messageToSend.putInt(0x0000007f);
+		messageToSend.putInt(0x0b000000);
+		messageToSend.putInt(0x00007f0b);
+		messageToSend.putInt(0x0000007f);
+		messageToSend.putInt(0x0b000000);
+		messageToSend.putInt(0x7f0b0000);
+		messageToSend.putInt(0x00000000);
+		messageToSend.putInt(0x0b000000);
+		messageToSend.putInt(0x7f0b0000);
+		messageToSend.putInt(0x007f0b00);
+
+	}
+
+
+	/**
 	 * Called to run a notification server for a short period of time (such as a second or two).
 	 * Runs on its own thread called by the executor; called repeatedly.
 	 */
@@ -370,6 +454,7 @@ public abstract class AbstractNIHostInterop {
 		});
 	}
 
+
 	/** Returns true iff the given response was the NI string 'true'. */
 	private boolean responseWasSuccess(byte[] result) {
 		ByteBuffer resultParser = ByteBuffer.wrap(result);
@@ -377,6 +462,7 @@ public abstract class AbstractNIHostInterop {
 
 		return (resultParser.getInt() == NI_SUCCESS);
 	}
+
 
 	/** Requests information from the NIHIA on a successful global connection. */
 	private void requestInfo() {
@@ -404,14 +490,6 @@ public abstract class AbstractNIHostInterop {
 		// TODO(ktemkin): subscribe to events for Maschine devices, too?
 	}
 
-
-	/**
-	 * Requests focus from the NIHostIntegrationAgent.
-	 * Used to request that the device display our data, specifically.
-	 */
-	public void requestFocus() {
-		this.pushRequest(NI_WHOLE_MSG_REQUEST_FOCUS);	
-	}
 
 
 	/** Handles a notification from the NIHostIntegrationAgent. */
@@ -561,7 +639,6 @@ public abstract class AbstractNIHostInterop {
 				final int button = data.getInt();
 				final int state  = data.getInt();
 
-				this.debugPrint("Button 0x%x %s (%x)!", button, (state % 2 == 0) ? "RELEASED" : "PRESSED", state);
 				this.host.scheduleTask(() -> this.eventHandler.handleButtonEvent(button, (state % 2 == 0) ? ButtonEvent.UP : ButtonEvent.DOWN), 0);
 				return;
 

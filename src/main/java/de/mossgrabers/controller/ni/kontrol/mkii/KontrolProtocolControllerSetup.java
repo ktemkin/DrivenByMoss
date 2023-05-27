@@ -67,6 +67,7 @@ import de.mossgrabers.framework.utils.OperatingSystem;
 import de.mossgrabers.framework.view.Views;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
@@ -211,6 +212,8 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
 
 			if ((serial != null) && !serial.isEmpty()) {
 				final var nihiaConnection = AbstractNIHostInterop.createInterop(DEVICE_ID, serial, surface, host);
+				surface.addNiConnection(nihiaConnection);
+
 				final NIGraphicDisplay display = new NIGraphicDisplay(this.host, this.valueChanger.getUpperBound(), this.configuration, nihiaConnection);
 				surface.addGraphicsDisplay(display);
 

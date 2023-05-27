@@ -18,6 +18,40 @@ import de.mossgrabers.framework.featuregroup.AbstractMode;
  */
 public class KontrolProtocolColorManager extends ColorManager
 {
+	public static final int           COLOR_BLACK        = 0;
+	public static final int           COLOR_DARK_GREY    = 76;
+	public static final int           COLOR_GREY         = 77;
+	public static final int           COLOR_WHITE        = 78;
+	public static final int           COLOR_ROSE         = 7;
+	public static final int           COLOR_RED          = 6;
+	public static final int           COLOR_RED_LO       = 5;
+	public static final int           COLOR_AMBER        = 14;
+	public static final int           COLOR_AMBER_LO     = 13;
+	public static final int           COLOR_LIME         = 34;
+	public static final int           COLOR_LIME_LO      = 33;
+	public static final int           COLOR_GREEN        = 30;
+	public static final int           COLOR_GREEN_LO     = 29;
+	public static final int           COLOR_SPRING       = 26;
+	public static final int           COLOR_SPRING_LO    = 25;
+	public static final int           COLOR_TURQUOISE_LO = 27;
+	public static final int           COLOR_TURQUOISE    = 31;
+	public static final int           COLOR_SKY          = 38;
+	public static final int           COLOR_SKY_LO       = 37;
+	public static final int           COLOR_BLUE         = 42;
+	public static final int           COLOR_BLUE_LO      = 45;
+	public static final int           COLOR_MAGENTA      = 58;
+	public static final int           COLOR_MAGENTA_LO   = 57;
+	public static final int           COLOR_PINK         = 62;
+	public static final int           COLOR_PINK_LO      = 61;
+	public static final int           COLOR_ORANGE       = 10;
+	public static final int           COLOR_ORANGE_LO    = 9;
+	public static final int           COLOR_PURPLE       = 50;
+	public static final int           COLOR_PURPLE_LO    = 53;
+	public static final int           COLOR_SKIN         = 11;
+	public static final int           COLOR_YELLOW_LO    = 21;
+	public static final int           COLOR_YELLOW       = 22;
+
+
     /**
      * Constructor.
      */

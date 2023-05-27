@@ -6,6 +6,7 @@ package de.mossgrabers.controller.ni.kontrol.mkii.controller;
 
 import de.mossgrabers.controller.ni.kontrol.mkii.KontrolProtocolConfiguration;
 import de.mossgrabers.controller.ni.kontrol.mkii.TrackType;
+import de.mossgrabers.controller.ni.core.AbstractNIHostInterop;
 import de.mossgrabers.controller.ni.core.INIEventHandler;
 import de.mossgrabers.framework.controller.AbstractControlSurface;
 import de.mossgrabers.framework.controller.ButtonID;
@@ -131,6 +132,7 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
     private final Object     cacheLock                            = new Object ();
     private final Object     handshakeLock                        = new Object ();
     private boolean          isConnectedToNIHIA                   = false;
+	private AbstractNIHostInterop niConnection                    = null;
 
 
     /**
@@ -326,15 +328,70 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
 	/** {@inheritDocs} */
 	@Override
 	public void handleButtonEvent(int rawButtonId, ButtonEvent event) {
-		// TODO Auto-generated method stub
+			this.host.println(String.format("Button 0x%x: %s!", rawButtonId, event));
 	}
 
 
 	/** {@inheritDocs} */
 	@Override
-	public void handleContinuousEvent(int rawContinuousId, int newValue) {
+	public void handleKnobEvent(int rawContinuousId, int newValue) {
 		// TODO Auto-generated method stub
 		
+	}
+
+
+	/** {@inheritDocs} */
+	@Override
+	public void handleMainEncoderEvent(int newValue) {
+		// TODO Auto-generated method stub
+		
+	}
+
+
+	/** {@inheritDocs} */
+	@Override
+	public void handleOctaveChanged(int newBaseNote) {
+		// TODO Auto-generated method stub
+		
+	}
+
+
+	/**
+	 * Adds an NIHIA connection, which can be used for thins like sending LED updates.
+	 *
+	 * @param nihiaConnection Our connection abstraction.
+	 */
+    public void addNiConnection(AbstractNIHostInterop nihiaConnection) {
+		this.niConnection = nihiaConnection;
+    }
+
+
+
+	/**
+	 * Sends a manual selection of LED colors.
+	 */
+	public void sendLedColors(byte [] ledColorIndices) {
+		if (this.niConnection == null) {
+			return;
+		}
+
+		// FIXME(ktemkin): convert indices to Kontrol values
+
+		this.niConnection.setLedColors(ledColorIndices);
+	}
+
+
+	/**
+	 * Sends a manual selection of keybed LED colors.
+	 */
+	public void setUpKeys(int keyzoneColorIndex) {
+		if (this.niConnection == null) {
+			return;
+		}
+
+		// FIXME(ktemkin): convert color to Kontrol value
+
+		this.niConnection.configureKeyzones(keyzoneColorIndex);
 	}
 
 
@@ -396,4 +453,7 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
             return false;
         }
     }
+
+
+
 }
