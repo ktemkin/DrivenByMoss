@@ -8,6 +8,8 @@ import de.mossgrabers.framework.daw.IHost;
 import de.mossgrabers.framework.utils.FrameworkException;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.Arrays;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -22,9 +24,6 @@ import com.sun.jna.ptr.*;
 /** {@inheritDocs} */
 public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	
-	/** The location of libdispatch on macOS; which has a well-known path not in the standard dylib path, for Some Reason(TM). */
-	public static final String LIBDISPATCH_PATH = "/usr/lib/system/introspection/libdispatch.dylib";
-
 	/**
 	 * Creates a new interface for connecting to the NIHostIntegrationAgent.
 	 *
@@ -42,8 +41,16 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	private CFMessagePort notificationPort;
 
 	/** True iff we've set up the runloop source for our notification callback. */
-	private boolean setUpNotificationSource = false;
+	private CFRunLoopSource notificationSource;
 
+	/** Our notification port's name. */
+	private String notificationPortName;
+	
+	/** Count how many times the other side has failed to send us a notification; useful for detecting stalls */
+	private int notificationTimeoutCount;
+
+	/** Executor that handles notifications off of the main callback thread. */
+	private ExecutorService notificationExecutor = Executors.newCachedThreadPool();
 
 	/**
 	 * Connects to our NIHostIntegrationAgent port we'll use for bootstrapping.
@@ -70,77 +77,83 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	 * Bootstraps a per-device connection to the NIHostIntegrationAgent.
 	 */
 	protected void bootstrapConnections() throws IOException {
-		CoreFoundationLibrary cfl = CoreFoundationLibrary.INSTANCE;	
+		synchronized (this.commsLock) {
+			CoreFoundationLibrary cfl = CoreFoundationLibrary.INSTANCE;	
 
-		byte[] deviceSerial = this.deviceSerialBytes.array();
+			byte[] deviceSerial = this.deviceSerialBytes.array();
 
-		// Create a bootstrap port connection, which we'll use to send a handshake.
-		CFMessagePort bootstrapPort = this.openPortByName(NI_BOOTSTRAP_PORT, false);
+			// Create a bootstrap port connection, which we'll use to send a handshake.
+			CFMessagePort bootstrapPort = this.openPortByName(NI_BOOTSTRAP_PORT, false);
 
-		// Build the message we'll use.
-		byte [] rawMessage  = new byte[NI_MSG_HANDSHAKE_LENGTH + deviceSerial.length + 1];
-		ByteBuffer messageBuffer = ByteBuffer.allocateDirect(NI_MSG_HANDSHAKE_LENGTH + deviceSerial.length + 1);
-		messageBuffer.order(ByteOrder.LITTLE_ENDIAN);
+			// Build the message we'll use.
+			byte [] rawMessage  = new byte[NI_MSG_HANDSHAKE_LENGTH + deviceSerial.length + 1];
+			ByteBuffer messageBuffer = ByteBuffer.wrap(rawMessage);
+			messageBuffer.order(ByteOrder.LITTLE_ENDIAN);
 
-		if (deviceSerial.length == 0) {
-			messageBuffer.putInt(NI_MSG_HANDSHAKE);           // Connect to the server, but not to specific hardware.
+			if (deviceSerial.length == 0) {
+				messageBuffer.putInt(NI_MSG_HANDSHAKE);           // Connect to the server, but not to specific hardware.
+			}
+			else {
+				messageBuffer.putInt(NI_MSG_CONNECT);             // Connect to a port for a specific piece of hardware.
+			}
+																  //
+			messageBuffer.putInt(this.deviceId);                  // The device type.
+			if (this.isKontrol) {
+				messageBuffer.putInt(NI_SOFTWARE_ID_KONTROL);     // The "NI software" that's connecting is KK.
+			} else {
+				messageBuffer.putInt(NI_SOFTWARE_ID_MASCHINE2);   // The "NI software" that's connecting is Maschine.
+			}
+			messageBuffer.putInt(NI_HEADER_CONSTANT);             // Unknown. Possibly protocol version?
+			messageBuffer.putInt(deviceSerial.length + 1);        // The length of the serial number that follows, plus a NULL.
+			
+			if (deviceSerial.length != 0) {
+			  messageBuffer.put(deviceSerial);                    // The serial number of the device we want to control, if any.
+			  messageBuffer.put((byte)0);					      // A null terminator for after the device serial.
+			}
+
+			// ... and perform our exchange.
+			byte [] rawResponse = this.sendOnMachPort(bootstrapPort, rawMessage, true);
+			if (rawResponse.length == 0) {
+				throw new IOException("NIHostIntegrationAgent did not reply. Failing out.");
+			}
+
+			// Interpret our response a variety of ways...
+			ByteBuffer response = ByteBuffer.wrap(rawResponse);
+			response.order(ByteOrder.LITTLE_ENDIAN);
+			if (rawResponse.length == 4) {
+				throw new IOException("NIHostIntegrationAgent reports an error. Failing out.");
+			}
+
+			// ... so we can extract our target data.
+			int checkVal = response.getInt();
+			int requestPortLength = response.getInt();
+			
+			if (checkVal != NI_SUCCESS) {
+				throw new IOException("Failed to communicate!");
+			}
+
+			// Finally, extract the core port name we need...
+			CharBuffer responseChars = Charset.forName("ASCII").decode(response);
+			String requestPortName   = responseChars.subSequence(0, requestPortLength - 1).toString();
+
+			int notificationPortLength = response.getInt(8 + requestPortLength);
+			this.notificationPortName = responseChars.subSequence(requestPortLength + 4, requestPortLength + 4 + notificationPortLength - 1).toString();
+
+			// ... open our ports...
+			this.requestPort = this.openPortByName(requestPortName, false);
+			this.notificationPort = this.openPortByName(notificationPortName, true);
+
+			// ... create an event source for our notifications...
+			this.notificationSource = cfl.CFMessagePortCreateRunLoopSource(CoreFoundationLibrary.kCFAllocatorDefault, this.notificationPort, 0);
+			if (notificationSource.getPointer() == Pointer.NULL) {
+				throw new IOException("fatal: event source was NULL");
+			}
+
+			// ... and finish our bootstrapping.
+			if (this.isKontrol) {
+				this.subscribeToNotifications(this.notificationPortName);
+			}
 		}
-		else {
-			messageBuffer.putInt(NI_MSG_CONNECT);             // Connect to a port for a specific piece of hardware.
-		}
-															  //
-		messageBuffer.putInt(this.deviceId);                  // The device type.
-		if (this.isKontrol) {
-			messageBuffer.putInt(NI_SOFTWARE_ID_KONTROL);     // The "NI software" that's connecting is KK.
-		} else {
-			messageBuffer.putInt(NI_SOFTWARE_ID_MASCHINE2);   // The "NI software" that's connecting is Maschine.
-		}
-		messageBuffer.putInt(NI_HEADER_CONSTANT);             // Unknown. Possibly protocol version?
-		messageBuffer.putInt(deviceSerial.length + 1);        // The length of the serial number that follows, plus a NULL.
-		
-		if (deviceSerial.length != 0) {
-		  messageBuffer.put(deviceSerial);                    // The serial number of the device we want to control, if any.
-	  	  messageBuffer.put((byte)0);					      // A null terminator for after the device serial.
-	    }
-
-		// Ensure we have a byte array.
-		messageBuffer.rewind();
-		messageBuffer.get(rawMessage);
-
-		// ... and perform our exchange.
-		byte [] rawResponse = this.sendOnMachPort(bootstrapPort, rawMessage, true);
-		if (rawResponse.length == 0) {
-			throw new IOException("NIHostIntegrationAgent did not reply. Failing out.");
-		}
-
-		// Interpret our response a variety of ways...
-		ByteBuffer response = ByteBuffer.wrap(rawResponse);
-		response.order(ByteOrder.LITTLE_ENDIAN);
-		if (rawResponse.length == 4) {
-			throw new IOException("NIHostIntegrationAgent reports an error. Failing out.");
-		}
-
-		// ... so we can extract our target data.
-		int checkVal = response.getInt();
-		int requestPortLength = response.getInt();
-		
-		if (checkVal != NI_SUCCESS) {
-			throw new IOException("Failed to communicate!");
-		}
-
-		// Finally, extract the core port name we need...
-		CharBuffer responseChars = Charset.forName("ASCII").decode(response);
-		String requestPortName   = responseChars.subSequence(0, requestPortLength - 1).toString();
-
-		int notificationPortLength = response.getInt(8 + requestPortLength);
-		String notificationPortName = responseChars.subSequence(requestPortLength + 4, requestPortLength + 4 + notificationPortLength - 1).toString();
-
-		// ... open our ports...
-		this.requestPort = this.openPortByName(requestPortName, false);
-		this.notificationPort = this.openPortByName(notificationPortName, true);
-
-		// ... and finish our bootstrapping.
-		this.subscribeToNotifications(notificationPortName);
 	}
 
 
@@ -155,14 +168,18 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	/** {@inheritDocs} */
 	@Override
 	public void pushRequest(byte [] data) {
-		this.sendOnMachPort(this.requestPort, data, false);
+		synchronized(this.commsLock) {
+			this.sendOnMachPort(this.requestPort, data, false);
+		}
 	}
 
 
 	/** {@inheritDocs} */
 	@Override
 	public byte[] sendRequest(byte [] data) {
-		return this.sendOnMachPort(this.requestPort, data, true);
+		synchronized(this.commsLock) {
+			return this.sendOnMachPort(this.requestPort, data, true);
+		}
 	}
 
 
@@ -170,24 +187,29 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	@Override
 	protected void pollForNotifications() {
 		CoreFoundationLibrary cfl = CoreFoundationLibrary.INSTANCE;	
+		CFRunLoop runLoop = cfl.CFRunLoopGetCurrent();
 
 		// If this is our first time running in this thread, attach ourselves to the main runloop.
-		if (!this.setUpNotificationSource) {
-			CFRunLoopSource eventSource = cfl.CFMessagePortCreateRunLoopSource(CoreFoundationLibrary.kCFAllocatorDefault, this.notificationPort, 0);
-			if (eventSource.getPointer() == Pointer.NULL) {
-				throw new FrameworkException("fatal: event source was NULL");
-			}
-
-			cfl.CFRunLoopAddSource(cfl.CFRunLoopGetCurrent(), eventSource, CoreFoundationLibrary.kCFRunLoopCommonModes);
-			cfl.CFRelease(eventSource);
-			this.setUpNotificationSource = true;
+		if (!cfl.CFRunLoopContainsSource(runLoop, this.notificationSource, CoreFoundationLibrary.kCFRunLoopCommonModes)) {
+			cfl.CFRunLoopAddSource(cfl.CFRunLoopGetCurrent(), this.notificationSource, CoreFoundationLibrary.kCFRunLoopCommonModes);
 		}
 			
 		// Run a Grand Central Dispatch runloop for long enough to handle any potential events.
 		// We're running for one second, here -- the time we spend here doesn't precisely matter,
 		// but it does set the amount of time it may take us to shut down vs the amount of CPU time
 		// wasted popping into this thread to re-issue the runloop.
-		cfl.CFRunLoopRunInMode(CoreFoundationLibrary.kCFRunLoopDefaultMode, 1, true);
+		var status = cfl.CFRunLoopRunInMode(CoreFoundationLibrary.kCFRunLoopDefaultMode, 10, false);
+		if (status == CoreFoundationLibrary.kCFRunLoopTimedOut) {
+			this.notificationTimeoutCount += 1;
+
+			if (this.notificationTimeoutCount > 2) {
+				this.debugPrint("WARNING: Messages seem to have stopped! Panic-restaring comms, if we can.");
+				this.subscribeToEvents();
+				this.notificationTimeoutCount = 0;
+			}
+		} else {
+			this.debugPrint("Error!");
+		}
 	}
 
 
@@ -200,7 +222,7 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 
 		// Delegate the raw notification back to the platform-independent code.
 		final byte [] notification = this.convertCFData(data, false);
-		this.handleNotification(notification);
+		this.notificationExecutor.submit(() -> this.handleNotification(notification));
 
 		return null;
 	}
@@ -280,10 +302,6 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 	public static class CFRunLoop extends PointerType {
 		public CFRunLoop() { super(); }
 		public CFRunLoop(Pointer pointer) { super(pointer); }
-	}
-	public static class DispatchQueue extends PointerType {
-		public DispatchQueue() { super(); }
-		public DispatchQueue(Pointer pointer) { super(pointer); }
 	}
 
 
@@ -375,8 +393,8 @@ public class MacOSNIHostInterop extends AbstractNIHostInterop {
 		//
 		CFRunLoop CFRunLoopGetCurrent();
 		int CFRunLoopRunInMode(CFStringRef mode, double seconds, boolean returnAfterSourceHandled);
-		void CFMessagePortSetDispatchQueue(CFMessagePort port, DispatchQueue dispatchQueue);
 		void CFRunLoopAddSource(CFRunLoop runLoop, CFRunLoopSource source, CFStringRef modeName);
+		boolean CFRunLoopContainsSource(CFRunLoop runLoop, CFRunLoopSource source, CFStringRef modeName);
 
 	}
 

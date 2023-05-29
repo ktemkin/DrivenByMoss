@@ -96,7 +96,6 @@ public class VolumeMode extends TrackVolumeMode<KontrolProtocolControlSurface, K
     public void onKnobTouch (final int index, final boolean isTouched)
     {
         this.setTouchedKnob (index, isTouched);
-
         super.onKnobTouch (index == 8 ? -1 : index, isTouched);
     }
 

@@ -10,19 +10,24 @@ import de.mossgrabers.controller.ni.core.NIGraphicDisplay;
 import de.mossgrabers.controller.ni.kontrol.mkii.command.trigger.StartClipOrSceneCommand;
 import de.mossgrabers.controller.ni.kontrol.mkii.controller.KontrolProtocolColorManager;
 import de.mossgrabers.controller.ni.kontrol.mkii.controller.KontrolProtocolControlSurface;
-import de.mossgrabers.controller.ni.kontrol.mkii.mode.MixerMode;
 import de.mossgrabers.controller.ni.kontrol.mkii.mode.ParamsMode;
 import de.mossgrabers.controller.ni.kontrol.mkii.mode.SendMode;
 import de.mossgrabers.controller.ni.kontrol.mkii.mode.VolumeMode;
 import de.mossgrabers.controller.ni.kontrol.mkii.view.ControlView;
+import de.mossgrabers.framework.command.continuous.KnobRowModeCommand;
+import de.mossgrabers.framework.command.core.ContinuousCommand;
 import de.mossgrabers.framework.command.core.NopCommand;
 import de.mossgrabers.framework.command.core.TriggerCommand;
+import de.mossgrabers.framework.command.trigger.ShiftCommand;
+import de.mossgrabers.framework.command.trigger.application.DeleteCommand;
 import de.mossgrabers.framework.command.trigger.application.RedoCommand;
 import de.mossgrabers.framework.command.trigger.application.UndoCommand;
 import de.mossgrabers.framework.command.trigger.clip.NewCommand;
 import de.mossgrabers.framework.command.trigger.clip.QuantizeCommand;
 import de.mossgrabers.framework.command.trigger.clip.StartSceneCommand;
 import de.mossgrabers.framework.command.trigger.clip.StopClipCommand;
+import de.mossgrabers.framework.command.trigger.mode.ButtonRowModeCommand;
+import de.mossgrabers.framework.command.trigger.mode.KnobRowTouchModeCommand;
 import de.mossgrabers.framework.command.trigger.mode.ModeMultiSelectCommand;
 import de.mossgrabers.framework.command.trigger.track.MuteCommand;
 import de.mossgrabers.framework.command.trigger.track.SoloCommand;
@@ -38,8 +43,12 @@ import de.mossgrabers.framework.controller.AbstractControllerSetup;
 import de.mossgrabers.framework.controller.ButtonID;
 import de.mossgrabers.framework.controller.ContinuousID;
 import de.mossgrabers.framework.controller.ISetupFactory;
+import de.mossgrabers.framework.controller.color.ColorManager;
 import de.mossgrabers.framework.controller.hardware.BindType;
+import de.mossgrabers.framework.controller.hardware.IHwButton;
 import de.mossgrabers.framework.controller.hardware.IHwRelativeKnob;
+import de.mossgrabers.framework.controller.valuechanger.IValueChanger;
+import de.mossgrabers.framework.controller.valuechanger.RelativeEncoding;
 import de.mossgrabers.framework.controller.valuechanger.TwosComplementValueChanger;
 import de.mossgrabers.framework.daw.IHost;
 import de.mossgrabers.framework.daw.ITransport;
@@ -67,6 +76,7 @@ import de.mossgrabers.framework.utils.OperatingSystem;
 import de.mossgrabers.framework.view.Views;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -141,6 +151,8 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
             return;
 
         final KontrolProtocolControlSurface surface = this.getSurface ();
+
+		/*
         final String kompleteInstanceNew = this.getKompleteInstance ();
         if (!this.kompleteInstance.equals (kompleteInstanceNew))
         {
@@ -163,6 +175,9 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         final Optional<ITrack> selectedTrack = tb.getSelectedItem ();
         surface.sendCommand (KontrolProtocolControlSurface.KONTROL_SELECTED_TRACK_AVAILABLE, selectedTrack.isPresent () ? TrackType.toTrackType (selectedTrack.get ().getType ()) : 0);
         surface.sendCommand (KontrolProtocolControlSurface.KONTROL_SELECTED_TRACK_MUTED_BY_SOLO, selectedTrack.isPresent () && !selectedTrack.get ().isSolo () && hasSolo ? 1 : 0);
+		*/
+
+		surface.updateButtonLights();
 
         super.flush ();
     }
@@ -272,7 +287,6 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         final ModeManager modeManager = surface.getModeManager ();
 
         final List<ContinuousID> controls = ContinuousID.createSequentialList (ContinuousID.KNOB1, 8);
-        controls.addAll (ContinuousID.createSequentialList (ContinuousID.FADER1, 8));
 
         modeManager.register (Modes.VOLUME, new VolumeMode (surface, this.model));
         modeManager.register (Modes.DEVICE_PARAMS, new ParamsMode (surface, this.model));
@@ -300,6 +314,8 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         final KontrolProtocolControlSurface surface = this.getSurface ();
         final ITransport t = this.model.getTransport ();
 
+		this.addButton (ButtonID.SHIFT, "Shift", new ShiftCommand<KontrolProtocolControlSurface,KontrolProtocolConfiguration>(this.model, surface));
+
         this.addButton (ButtonID.PLAY, "Play", new PlayCommand<> (this.model, surface), 15, KontrolProtocolControlSurface.KONTROL_PLAY, t::isPlaying);
         this.addButton (ButtonID.NEW, "Shift+\nPlay", new NewCommand<> (this.model, surface), 15, KontrolProtocolControlSurface.KONTROL_RESTART);
         final ConfiguredRecordCommand<KontrolProtocolControlSurface, KontrolProtocolConfiguration> recordCommand = new ConfiguredRecordCommand<> (false, this.model, surface);
@@ -319,7 +335,7 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         this.addButton (ButtonID.QUANTIZE, "Quantize", new QuantizeCommand<> (this.model, surface), 15, KontrolProtocolControlSurface.KONTROL_QUANTIZE, () -> true);
         this.addButton (ButtonID.AUTOMATION, "Automation", new WriteArrangerAutomationCommand<> (this.model, surface), 15, KontrolProtocolControlSurface.KONTROL_AUTOMATION, t::isWritingArrangerAutomation);
 
-        this.addButton (ButtonID.DELETE, "Modes", new ModeMultiSelectCommand<> (this.model, surface, Modes.VOLUME, Modes.SEND, Modes.DEVICE_PARAMS), 15, KontrolProtocolControlSurface.KONTROL_CLEAR, () -> true);
+        this.addButton (ButtonID.DELETE, "Clear", new DeleteCommand<> (this.model, surface), 15, KontrolProtocolControlSurface.KONTROL_CLEAR, () -> true);
 
         this.addButton (ButtonID.CLIP, "Start Clip", new StartClipOrSceneCommand (this.model, surface), 15, KontrolProtocolControlSurface.KONTROL_PLAY_SELECTED_CLIP);
         this.addButton (ButtonID.STOP_CLIP, "Stop Clip", new StopClipCommand<> (this.model, surface), 15, KontrolProtocolControlSurface.KONTROL_STOP_CLIP);
@@ -344,24 +360,53 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
                 this.model.getCurrentTrackBank ().getItem (index).selectOrExpandGroup ();
         }, 15, KontrolProtocolControlSurface.KONTROL_TRACK_SELECTED, index -> this.model.getTrackBank ().getItem (index).isSelected () ? 1 : 0);
 
-        this.addButtons (surface, 0, 8, ButtonID.ROW1_1, "Mute", (event, index) -> {
-            if (event == ButtonEvent.DOWN)
-                this.model.getTrackBank ().getItem (index).toggleMute ();
-        }, 15, KontrolProtocolControlSurface.KONTROL_TRACK_MUTE, index -> this.model.getTrackBank ().getItem (index).isMute () ? 1 : 0);
-
-        this.addButtons (surface, 0, 8, ButtonID.ROW2_1, "Solo", (event, index) -> {
-            if (event == ButtonEvent.DOWN)
-                this.model.getTrackBank ().getItem (index).toggleSolo ();
-        }, 15, KontrolProtocolControlSurface.KONTROL_TRACK_SOLO, index -> this.model.getTrackBank ().getItem (index).isSolo () ? 1 : 0);
-
-        this.addButtons (surface, 0, 8, ButtonID.ROW3_1, "Arm", (event, index) -> {
-            if (event == ButtonEvent.DOWN)
-                this.model.getTrackBank ().getItem (index).toggleRecArm ();
-        }, 15, KontrolProtocolControlSurface.KONTROL_TRACK_RECARM, index -> this.model.getTrackBank ().getItem (index).isRecArm () ? 1 : 0);
-
         this.addButton (ButtonID.F1, "", NopCommand.INSTANCE, 15, KontrolProtocolControlSurface.KONTROL_SELECTED_TRACK_AVAILABLE);
         this.addButton (ButtonID.F2, "", NopCommand.INSTANCE, 15, KontrolProtocolControlSurface.KONTROL_SELECTED_TRACK_MUTED_BY_SOLO);
     }
+
+
+	
+	/**
+	 * Adds a non-MIDI button with a simple trigger handler.
+	 */
+	protected void addButton(ButtonID buttonId, String label, TriggerCommand action) {
+		this.addButton(this.getSurface(), buttonId, label, action);
+	}
+
+	
+	/**
+	 * Adds a non-MIDI button with a simple trigger handler.
+	 */
+	protected void addButton(KontrolProtocolControlSurface surface, ButtonID buttonId, String label, TriggerCommand action) {
+		final IHwButton button = surface.createButton(buttonId, label);
+		button.bind(action);
+
+		surface.createLight(null, () -> { return this.colorManager.getColor(this.getButtonColor(surface, buttonId), buttonId); }, color -> surface.setButtonColor(buttonId, color));
+	}
+
+
+	/** {@inheritDocs} */
+	@Override
+    protected void addButton (final ButtonID buttonId, final String label, final TriggerCommand command, final int midiChannel, final int midiControl, final BooleanSupplier supplier)
+    {
+		KontrolProtocolControlSurface surface = (KontrolProtocolControlSurface)this.getSurface();
+
+        super.addButton (buttonId, label, command, midiChannel, midiControl, () -> supplier.getAsBoolean () ? KontrolProtocolColorManager.COLOR_WHITE : KontrolProtocolColorManager.COLOR_DARK_GREY);
+		surface.createLight(null, () -> { return this.colorManager.getColor(this.getButtonColor(surface, buttonId), buttonId); }, color -> surface.setButtonColor(buttonId, color));
+    }
+
+
+
+    /**
+     * Create a hardware knob proxy on a controller, which sends relative values, and bind a continuous command to it.
+     */
+    protected IHwRelativeKnob addRelativeKnob (final KontrolProtocolControlSurface surface, final ContinuousID continuousID, final String label, final ContinuousCommand command)
+    {
+        final IHwRelativeKnob knob = surface.createRelativeKnob (continuousID, label, RelativeEncoding.TWOS_COMPLEMENT);
+        knob.bind (command);
+        return knob;
+    }
+
 
 
     /** {@inheritDoc} */
@@ -372,12 +417,10 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
 
         this.addFader (ContinuousID.HELLO, "Hello", surface::handshakeSuccess, BindType.CC, 15, KontrolProtocolControlSurface.CMD_HELLO);
 
-        this.addButton (surface, ButtonID.BANK_LEFT, "Left", (event, velocity) -> this.moveTrackBank (event, true), 15, KontrolProtocolControlSurface.KONTROL_NAVIGATE_BANKS, 127, () -> this.getKnobValue (KontrolProtocolControlSurface.KONTROL_NAVIGATE_BANKS));
-        this.addButton (surface, ButtonID.BANK_RIGHT, "Right", (event, velocity) -> this.moveTrackBank (event, false), 15, KontrolProtocolControlSurface.KONTROL_NAVIGATE_BANKS, 1, () -> this.getKnobValue (KontrolProtocolControlSurface.KONTROL_NAVIGATE_BANKS));
-        this.addButton (surface, ButtonID.MOVE_TRACK_LEFT, "Enc Left", (event, velocity) -> this.moveTrack (event, true), 15, KontrolProtocolControlSurface.KONTROL_NAVIGATE_TRACKS, 127, () -> this.getKnobValue (KontrolProtocolControlSurface.KONTROL_NAVIGATE_TRACKS));
-        this.addButton (surface, ButtonID.MOVE_TRACK_RIGHT, "Enc Right", (event, velocity) -> this.moveTrack (event, false), 15, KontrolProtocolControlSurface.KONTROL_NAVIGATE_TRACKS, 1, () -> this.getKnobValue (KontrolProtocolControlSurface.KONTROL_NAVIGATE_TRACKS));
-        this.addButton (surface, ButtonID.ARROW_UP, "Enc Up", (event, velocity) -> this.moveClips (event, true), 15, KontrolProtocolControlSurface.KONTROL_NAVIGATE_CLIPS, 127, () -> this.getKnobValue (KontrolProtocolControlSurface.KONTROL_NAVIGATE_CLIPS));
-        this.addButton (surface, ButtonID.ARROW_DOWN, "Enc Down", (event, velocity) -> this.moveClips (event, false), 15, KontrolProtocolControlSurface.KONTROL_NAVIGATE_CLIPS, 1, () -> this.getKnobValue (KontrolProtocolControlSurface.KONTROL_NAVIGATE_CLIPS));
+		// Add our modal buttons (the buttons above the screen).
+		for (int i = 0; i < 8; ++i) {
+			this.addButton(surface, ButtonID.get(ButtonID.ROW2_1, i), "Mode " + Integer.toString(i), new ButtonRowModeCommand<KontrolProtocolControlSurface,KontrolProtocolConfiguration>(0, i, this.model, surface));
+		}
 
         this.addRelativeKnob (ContinuousID.MOVE_TRANSPORT, "Move Transport", value -> this.changeTransportPosition (value, 0), BindType.CC, 15, KontrolProtocolControlSurface.KONTROL_NAVIGATE_MOVE_TRANSPORT);
         this.addRelativeKnob (ContinuousID.MOVE_LOOP, "Move Loop", this::changeLoopPosition, BindType.CC, 15, KontrolProtocolControlSurface.KONTROL_NAVIGATE_MOVE_LOOP);
@@ -388,15 +431,11 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
 
         for (int i = 0; i < 8; i++)
         {
-            final int knobMidi1 = KontrolProtocolControlSurface.KONTROL_TRACK_VOLUME + i;
-            final IHwRelativeKnob knob1 = this.addRelativeKnob (ContinuousID.get (ContinuousID.KNOB1, i), "Knob " + (i + 1), null, BindType.CC, 15, knobMidi1);
-            knob1.addOutput ( () -> this.getKnobValue (knobMidi1), value -> surface.setTrigger (15, knobMidi1, value));
-            knob1.setIndexInGroup (i);
+			final var index = i;
+            final IHwRelativeKnob knob = this.addRelativeKnob (surface, ContinuousID.get (ContinuousID.KNOB1, i), "Knob " + (i + 1), new KnobRowModeCommand<>(index, this.model, surface));
 
-            final int knobMidi2 = KontrolProtocolControlSurface.KONTROL_TRACK_PAN + i;
-            final IHwRelativeKnob knob2 = this.addRelativeKnob (ContinuousID.get (ContinuousID.FADER1, i), "Fader " + (i + 1), null, BindType.CC, 15, knobMidi2);
-            knob2.addOutput ( () -> this.getKnobValue (knobMidi2), value -> surface.setTrigger (15, knobMidi2, value));
-            knob2.setIndexInGroup (i);
+			// Add the touch sensor for the knob.
+			this.addButton(surface, ButtonID.get(ButtonID.KNOB1_TOUCH, i), "Knob " + Integer.toString(i), new KnobRowTouchModeCommand<KontrolProtocolControlSurface, KontrolProtocolConfiguration>(i, this.model, surface));
         }
     }
 
@@ -449,14 +488,14 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         surface.getButton (ButtonID.ROW_SELECT_6).setBounds (548.5, 43.0, 39.75, 16.0);
         surface.getButton (ButtonID.ROW_SELECT_7).setBounds (602.75, 43.0, 39.75, 16.0);
         surface.getButton (ButtonID.ROW_SELECT_8).setBounds (657.25, 43.0, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW1_1).setBounds (276.0, 67.5, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW1_2).setBounds (330.5, 67.5, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW1_3).setBounds (385.0, 67.5, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW1_4).setBounds (439.5, 67.5, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW1_5).setBounds (494.0, 67.5, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW1_6).setBounds (548.5, 67.5, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW1_7).setBounds (602.75, 67.5, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW1_8).setBounds (657.25, 67.5, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW1_1).setBounds (276.0, 67.5, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW1_2).setBounds (330.5, 67.5, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW1_3).setBounds (385.0, 67.5, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW1_4).setBounds (439.5, 67.5, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW1_5).setBounds (494.0, 67.5, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW1_6).setBounds (548.5, 67.5, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW1_7).setBounds (602.75, 67.5, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW1_8).setBounds (657.25, 67.5, 39.75, 16.0);
         surface.getButton (ButtonID.ROW2_1).setBounds (276.0, 92.25, 39.75, 16.0);
         surface.getButton (ButtonID.ROW2_2).setBounds (330.5, 92.25, 39.75, 16.0);
         surface.getButton (ButtonID.ROW2_3).setBounds (385.0, 92.25, 39.75, 16.0);
@@ -465,21 +504,23 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         surface.getButton (ButtonID.ROW2_6).setBounds (548.5, 92.25, 39.75, 16.0);
         surface.getButton (ButtonID.ROW2_7).setBounds (602.75, 92.25, 39.75, 16.0);
         surface.getButton (ButtonID.ROW2_8).setBounds (657.25, 92.25, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW3_1).setBounds (276.0, 116.75, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW3_2).setBounds (330.5, 116.75, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW3_3).setBounds (385.0, 116.75, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW3_4).setBounds (439.5, 116.75, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW3_5).setBounds (494.0, 116.75, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW3_6).setBounds (548.5, 116.75, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW3_7).setBounds (602.75, 116.75, 39.75, 16.0);
-        surface.getButton (ButtonID.ROW3_8).setBounds (657.25, 116.75, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW3_1).setBounds (276.0, 116.75, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW3_2).setBounds (330.5, 116.75, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW3_3).setBounds (385.0, 116.75, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW3_4).setBounds (439.5, 116.75, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW3_5).setBounds (494.0, 116.75, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW3_6).setBounds (548.5, 116.75, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW3_7).setBounds (602.75, 116.75, 39.75, 16.0);
+        //surface.getButton (ButtonID.ROW3_8).setBounds (657.25, 116.75, 39.75, 16.0);
 
+		/*
         surface.getButton (ButtonID.BANK_LEFT).setBounds (188.5, 78.5, 29.75, 20.5);
         surface.getButton (ButtonID.BANK_RIGHT).setBounds (225.75, 78.5, 29.75, 20.5);
         surface.getButton (ButtonID.MOVE_TRACK_LEFT).setBounds (705.5, 188.5, 29.75, 20.5);
         surface.getButton (ButtonID.MOVE_TRACK_RIGHT).setBounds (751.0, 188.5, 29.75, 20.5);
         surface.getButton (ButtonID.ARROW_UP).setBounds (727.25, 163.25, 29.75, 20.5);
         surface.getButton (ButtonID.ARROW_DOWN).setBounds (727.25, 211.5, 29.75, 20.5);
+		*/
 
         surface.getButton (ButtonID.CLIP).setBounds (512.75, 0.75, 31.75, 22.75);
         surface.getButton (ButtonID.STOP_CLIP).setBounds (550.25, 0.75, 31.75, 22.75);
@@ -494,21 +535,13 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         surface.getContinuous (ContinuousID.NAVIGATE_PAN).setBounds (752.25, 80.75, 27.75, 29.75);
 
         surface.getContinuous (ContinuousID.KNOB1).setBounds (284.0, 143.25, 28.0, 29.25);
-        surface.getContinuous (ContinuousID.FADER1).setBounds (284.0, 178.5, 28.0, 29.25);
         surface.getContinuous (ContinuousID.KNOB2).setBounds (338.25, 143.25, 28.0, 29.25);
-        surface.getContinuous (ContinuousID.FADER2).setBounds (338.25, 178.5, 28.0, 29.25);
         surface.getContinuous (ContinuousID.KNOB3).setBounds (392.5, 143.25, 28.0, 29.25);
-        surface.getContinuous (ContinuousID.FADER3).setBounds (392.75, 178.5, 28.0, 29.25);
         surface.getContinuous (ContinuousID.KNOB4).setBounds (446.75, 143.25, 28.0, 29.25);
-        surface.getContinuous (ContinuousID.FADER4).setBounds (447.0, 178.5, 28.0, 29.25);
         surface.getContinuous (ContinuousID.KNOB5).setBounds (501.25, 143.25, 28.0, 29.25);
-        surface.getContinuous (ContinuousID.FADER5).setBounds (501.25, 178.5, 28.0, 29.25);
         surface.getContinuous (ContinuousID.KNOB6).setBounds (555.5, 143.25, 28.0, 29.25);
-        surface.getContinuous (ContinuousID.FADER6).setBounds (555.75, 178.5, 28.0, 29.25);
         surface.getContinuous (ContinuousID.KNOB7).setBounds (609.75, 143.25, 28.0, 29.25);
-        surface.getContinuous (ContinuousID.FADER7).setBounds (610.0, 178.5, 28.0, 29.25);
         surface.getContinuous (ContinuousID.KNOB8).setBounds (664.25, 143.25, 28.0, 29.25);
-        surface.getContinuous (ContinuousID.FADER8).setBounds (664.25, 178.5, 28.0, 29.25);
 
         surface.getContinuous (ContinuousID.MODULATION_WHEEL).setBounds (100.0, 222.75, 22.75, 67.5);
         surface.getContinuous (ContinuousID.PITCHBEND_WHEEL).setBounds (65.5, 222.75, 22.75, 67.5);
@@ -719,7 +752,6 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
 
     private int getKnobValue (final int continuousMidiControl)
     {
-		return 0; // XXX
         //final IMode mode = this.getSurface ().getModeManager ().getActive ();
         //return mode == null ? 0 : Math.max (0, mode.getKnobValue (continuousMidiControl));
     }

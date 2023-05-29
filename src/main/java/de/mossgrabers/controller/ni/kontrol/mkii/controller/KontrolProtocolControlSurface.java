@@ -10,7 +10,7 @@ import de.mossgrabers.controller.ni.core.AbstractNIHostInterop;
 import de.mossgrabers.controller.ni.core.INIEventHandler;
 import de.mossgrabers.framework.controller.AbstractControlSurface;
 import de.mossgrabers.framework.controller.ButtonID;
-import de.mossgrabers.framework.controller.ContinuousID;
+import de.mossgrabers.framework.controller.color.ColorEx;
 import de.mossgrabers.framework.controller.color.ColorManager;
 import de.mossgrabers.framework.controller.hardware.BindType;
 import de.mossgrabers.framework.daw.IHost;
@@ -19,9 +19,11 @@ import de.mossgrabers.framework.daw.midi.IMidiOutput;
 import de.mossgrabers.framework.utils.ButtonEvent;
 import de.mossgrabers.framework.utils.StringUtils;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -126,6 +128,7 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
     /** Selected track muted by solo. */
     public static final int  KONTROL_SELECTED_TRACK_MUTED_BY_SOLO = 0x69;
 
+
     private final int        requiredVersion;
     private int              protocolVersion                      = KontrolProtocol.MAX_VERSION;
     private final ValueCache valueCache                           = new ValueCache ();
@@ -133,6 +136,10 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
     private final Object     handshakeLock                        = new Object ();
     private boolean          isConnectedToNIHIA                   = false;
 	private AbstractNIHostInterop niConnection                    = null;
+
+	/** The color index for each button. */
+	// FIXME(ktemkin): find an elegant way to get this bound
+	private ColorEx[]        colorForButton                       = new ColorEx[256];
 
 
     /**
@@ -328,23 +335,46 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
 	/** {@inheritDocs} */
 	@Override
 	public void handleButtonEvent(int rawButtonId, ButtonEvent event) {
-			this.host.println(String.format("Button 0x%x: %s!", rawButtonId, event));
+
+		// Convert our button from a NIHIA message number to a concrete ButtonID.
+		var buttonId = this.translateNIHIAButton(rawButtonId);
+		var button = this.getButton(buttonId);
+
+		// If we got null, we don't yet handle this button. Abort.
+		if (button == null) {
+			return;
+		}
+
+		// Otherwise, send the event to the button.
+		button.trigger(event);
 	}
 
 
 	/** {@inheritDocs} */
 	@Override
-	public void handleKnobEvent(int rawContinuousId, int newValue) {
-		// TODO Auto-generated method stub
-		
+	public void handleKnobEvent(int index, int newValue) {
+
+		// ... and if there's a hardware continious control, trigger it to update.
+		final var mode = this.getModeManager().getActive();
+		if (mode != null) {
+			int delta = newValue >> 27;
+			if (!this.isShiftPressed()) {
+				delta = delta >> 2;
+			} else {
+				delta = (delta < 0) ? delta : (delta >> 1);
+			}
+			if (delta < 0) {
+				delta = delta >> 2;
+			}
+
+			mode.onKnobValue(index, delta);
+		}
 	}
 
 
 	/** {@inheritDocs} */
 	@Override
 	public void handleMainEncoderEvent(int newValue) {
-		// TODO Auto-generated method stub
-		
 	}
 
 
@@ -355,7 +385,7 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
 		
 	}
 
-
+	
 	/**
 	 * Adds an NIHIA connection, which can be used for thins like sending LED updates.
 	 *
@@ -367,31 +397,130 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
 
 
 
+	public void setButtonColor(ButtonID button, ColorEx color) {
+		this.colorForButton[button.ordinal()] = color;
+	}
+
+
+	
+	/**
+	 * Returns the (nearest NI) color index for a given button.
+	 */ 
+	public byte getColorForButton(ButtonID button) {
+		var manager = (KontrolProtocolColorManager)this.colorManager;
+		var color = this.colorForButton[button.ordinal()];
+
+		// If we don't have a color set, default to OFF.
+		if (color == null) {
+			return KontrolProtocolColorManager.COLOR_BLACK;
+		}
+
+		return (byte)manager.getNIColor(color);
+	}
+
+
+
 	/**
 	 * Sends a manual selection of LED colors.
+	 * Does not appear to touch the key LEDs.
 	 */
-	public void sendLedColors(byte [] ledColorIndices) {
+	public void updateButtonLights() {
 		if (this.niConnection == null) {
 			return;
 		}
 
-		// FIXME(ktemkin): convert indices to Kontrol values
+		// Build a packet of each button color.
+		byte[] ledIndices = new byte[37];
+		ByteBuffer ledBuffer = ByteBuffer.wrap(ledIndices);
 
-		this.niConnection.setLedColors(ledColorIndices);
+		ledBuffer.put(this.getColorForButton(ButtonID.MUTE));
+		ledBuffer.put(this.getColorForButton(ButtonID.SOLO));
+
+		ledBuffer.put(this.getColorForButton(ButtonID.ROW2_1));
+		ledBuffer.put(this.getColorForButton(ButtonID.ROW2_2));
+		ledBuffer.put(this.getColorForButton(ButtonID.ROW2_3));
+		ledBuffer.put(this.getColorForButton(ButtonID.ROW2_4));
+		ledBuffer.put(this.getColorForButton(ButtonID.ROW2_5));
+		ledBuffer.put(this.getColorForButton(ButtonID.ROW2_6));
+		ledBuffer.put(this.getColorForButton(ButtonID.ROW2_7));
+		ledBuffer.put(this.getColorForButton(ButtonID.ROW2_8));
+
+		ledBuffer.put(this.getColorForButton(ButtonID.LEFT));
+		ledBuffer.put(this.getColorForButton(ButtonID.UP));
+		ledBuffer.put(this.getColorForButton(ButtonID.RIGHT));
+		ledBuffer.put(this.getColorForButton(ButtonID.DOWN));
+
+		// This byte doesn't seem to do anything.
+		ledBuffer.put((byte)0);
+
+		ledBuffer.put(this.getColorForButton(ButtonID.SCALES));
+		ledBuffer.put(this.getColorForButton(ButtonID.REPEAT));
+		ledBuffer.put(this.getColorForButton(ButtonID.SCENE1));
+		ledBuffer.put(this.getColorForButton(ButtonID.UNDO));
+		ledBuffer.put(this.getColorForButton(ButtonID.QUANTIZE));
+		ledBuffer.put(this.getColorForButton(ButtonID.AUTOMATION));
+		ledBuffer.put(this.getColorForButton(ButtonID.CLIP));
+		ledBuffer.put(this.getColorForButton(ButtonID.PAGE_LEFT));
+		ledBuffer.put(this.getColorForButton(ButtonID.TRACK));
+		ledBuffer.put(this.getColorForButton(ButtonID.LOOP));
+		ledBuffer.put(this.getColorForButton(ButtonID.METRONOME));
+		ledBuffer.put(this.getColorForButton(ButtonID.TAP_TEMPO));
+		ledBuffer.put(this.getColorForButton(ButtonID.PAGE_RIGHT));
+		ledBuffer.put(this.getColorForButton(ButtonID.CONFIGURE_PITCHBEND));
+		ledBuffer.put(this.getColorForButton(ButtonID.PLAY));
+		ledBuffer.put(this.getColorForButton(ButtonID.RECORD));
+		ledBuffer.put(this.getColorForButton(ButtonID.STOP));
+		ledBuffer.put(this.getColorForButton(ButtonID.BANK_LEFT));
+		ledBuffer.put(this.getColorForButton(ButtonID.BANK_RIGHT));
+		ledBuffer.put(this.getColorForButton(ButtonID.DELETE));
+		ledBuffer.put(this.getColorForButton(ButtonID.BROWSE));
+		ledBuffer.put(this.getColorForButton(ButtonID.DEVICE));
+
+		assert(!ledBuffer.hasRemaining());
+
+		this.niConnection.setLedColors(ledIndices);
 	}
 
 
 	/**
-	 * Sends a manual selection of keybed LED colors.
-	 */
-	public void setUpKeys(int keyzoneColorIndex) {
-		if (this.niConnection == null) {
-			return;
+	 * Translates an NIHIA button index to a local ButtonID.
+	 */ 
+	public ButtonID translateNIHIAButton(int rawButton) {
+		switch (rawButton) {
+			case 0x00: return ButtonID.ROW2_5;              // Above the screen.
+			case 0x01: return ButtonID.ROW2_6;
+			case 0x02: return ButtonID.ROW2_7;
+			case 0x03: return ButtonID.ROW2_8;
+			case 0x04: return ButtonID.ROW2_1;
+			case 0x05: return ButtonID.ROW2_2;
+			case 0x06: return ButtonID.ROW2_3;
+			case 0x07: return ButtonID.ROW2_4;
+			case 0x0b: return ButtonID.SCALES;              // Scales
+			case 0x0a: return ButtonID.REPEAT;              // ARP 
+			case 0x0f: return ButtonID.SHIFT;               // Shift
+			case 0x14: return ButtonID.PAGE_LEFT;           // Preset up button
+			case 0x16: return ButtonID.PAGE_RIGHT;          // Preset down button
+			case 0x15: return ButtonID.BANK_RIGHT;          // Right arrow, left of screen
+			case 0x17: return ButtonID.BANK_LEFT;           // Left arrow, left of screen
+			case 0x1c: return ButtonID.TRACK;               // Track
+			case 0x1e: return ButtonID.CONFIGURE_PITCHBEND; // Key mode.
+			case 0x21: return ButtonID.DEVICE;              // Plugin.
+			case 0x22: return ButtonID.BROWSE;              // Browser
+			case 0x37: return ButtonID.KNOB1_TOUCH;         // Knobs below the screen.
+			case 0x36: return ButtonID.KNOB2_TOUCH;
+			case 0x35: return ButtonID.KNOB3_TOUCH;
+			case 0x34: return ButtonID.KNOB4_TOUCH;
+			case 0x33: return ButtonID.KNOB5_TOUCH;
+			case 0x32: return ButtonID.KNOB6_TOUCH;
+			case 0x31: return ButtonID.KNOB7_TOUCH;
+			case 0x30: return ButtonID.KNOB8_TOUCH;
+
+			// Print a message for any unknown buttons, so we can implement them later.
+			default:
+				this.host.println(String.format("Unknown NIHIA button 0x%x pressed!", rawButton));
+				return null;
 		}
 
-		// FIXME(ktemkin): convert color to Kontrol value
-
-		this.niConnection.configureKeyzones(keyzoneColorIndex);
 	}
 
 
@@ -427,7 +556,7 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
         }
 
 
-        /**
+        /**KontrolProtocolControllerSetup.java
          * Stores the value and data in the cache for the track and stateID.
          *
          * @param track The track number

@@ -53,6 +53,10 @@ public abstract class AbstractNIHostInterop {
 	/** The set of callbacks issued when events happen. */
 	protected final INIEventHandler eventHandler;
 
+	/** General comms lock; in case we need to panic-restart. */
+	protected Object commsLock;
+
+
 	//
 	// Constants.
 	//
@@ -195,6 +199,7 @@ public abstract class AbstractNIHostInterop {
 		this.deviceId = deviceId;
 		this.isShutdown = new AtomicBoolean(false);
 		this.eventHandler = eventHandler;
+		this.commsLock = new Object();
 		
 		deviceSerial = (deviceSerial == null) ? "" : deviceSerial;
 		this.isGlobalConnection = deviceSerial.isEmpty();
@@ -479,7 +484,7 @@ public abstract class AbstractNIHostInterop {
 	 * events on Maschine devices (except the MIDI ports), and most of the non-time-critical
 	 * events on the Komplete Kontrol devices.
 	 * */
-	private void subscribeToEvents() {
+	protected void subscribeToEvents() {
 
 		// Kontrol devices aren't nearly as complex as e.g. Maschine ones.
 		// We'll just claim them entirely, and control them from there.
