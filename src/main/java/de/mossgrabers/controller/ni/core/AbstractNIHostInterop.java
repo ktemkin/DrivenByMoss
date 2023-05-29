@@ -209,6 +209,7 @@ public abstract class AbstractNIHostInterop {
 		this.deviceSerialBytes = Charset.forName("ASCII").encode(deviceSerial);
 		this.bootstrapConnections();
 
+
 		// If this is a global connection, issue our start-of-day requests.
 		if (this.isGlobalConnection) {
 			this.requestInfo();
@@ -297,7 +298,7 @@ public abstract class AbstractNIHostInterop {
 		this.host = host;
 	}
 
-	/** Prints a debug message, if possible. Same arguments as println(). */
+	/** Prints a debug message, if possible. Same arguments as String.format(). */
 	public void debugPrint(String message, Object ... toFormat) {
 		if (this.host == null) {
 			return;
@@ -340,7 +341,9 @@ public abstract class AbstractNIHostInterop {
 	 * Used to request that the device display our data, specifically.
 	 */
 	public void requestFocus() {
-		this.pushRequest(NI_WHOLE_MSG_REQUEST_FOCUS);	
+		if (this.isKontrol) {
+			this.pushRequest(NI_WHOLE_MSG_REQUEST_FOCUS);	
+		}
 	}
 
 	
@@ -361,7 +364,7 @@ public abstract class AbstractNIHostInterop {
 		// ... and add in the body of raw LED colors.
 		messageToSend.put(rawLedColors);
 
-		this.sendRequest(messageToSend.array());
+		this.pushRequest(messageToSend.array());
 	}
 
 
@@ -474,7 +477,7 @@ public abstract class AbstractNIHostInterop {
 
 		// Request information about connected devices.
 		// We'll be sent information about connected devices as a notification.
-		this.sendRequest(NI_WHOLE_MSG_GET_DEVICE_STATE);
+		this.pushRequest(NI_WHOLE_MSG_GET_DEVICE_STATE);
 	}
 
 
@@ -605,7 +608,7 @@ public abstract class AbstractNIHostInterop {
 			return;
 		}
 	
-		this.host.scheduleTask(() -> this.eventHandler.handleOctaveChanged(newBase), 0);
+		this.scheduleImmediateTask(() -> this.eventHandler.handleOctaveChanged(newBase));
 	}
 
 
@@ -628,6 +631,7 @@ public abstract class AbstractNIHostInterop {
 			return;
 		}
 
+
 		// Discard the data that's irrelevant to us...
 		data.getInt();
 		data.getInt();
@@ -644,7 +648,7 @@ public abstract class AbstractNIHostInterop {
 				final int button = data.getInt();
 				final int state  = data.getInt();
 
-				this.host.scheduleTask(() -> this.eventHandler.handleButtonEvent(button, (state % 2 == 0) ? ButtonEvent.UP : ButtonEvent.DOWN), 0);
+				this.scheduleImmediateTask(() -> this.eventHandler.handleButtonEvent(button, (state % 2 == 0) ? ButtonEvent.UP : ButtonEvent.DOWN));
 				return;
 
 			default:
@@ -674,7 +678,7 @@ public abstract class AbstractNIHostInterop {
 		final int knob    = data.getInt();
 		final int encoder = data.getInt();
 
-		this.host.scheduleTask(() -> this.eventHandler.handleKnobEvent(knob, encoder), 0);
+		this.scheduleImmediateTask(() -> this.eventHandler.handleKnobEvent(knob, encoder));
 	}
 
 
@@ -689,14 +693,12 @@ public abstract class AbstractNIHostInterop {
 			return;
 		}
 
-		this.debugPrint("Main encoder message:");
-
 		// For now, discard the timestamp...
 		data.getInt();
 
 		// ... but keep the encoder value.
 		var encoderValue = data.getInt();
-		this.host.scheduleTask(() -> this.eventHandler.handleMainEncoderEvent(encoderValue), 0);
+		this.scheduleImmediateTask(() -> this.eventHandler.handleMainEncoderEvent(encoderValue));
 	}
 
 
@@ -723,6 +725,24 @@ public abstract class AbstractNIHostInterop {
 		// Theoretically, we're supposed to let go when the MIDI 
 		if (!haveClaim) {
 			this.subscribeToEvents();
+		}
+	}
+
+	//
+	// Generic callback helpers.
+	//
+	void scheduleImmediateTask(Runnable task) {
+		if (this.host == null) {
+			return;
+		}
+
+		// FIXME(ktemkin): The current beta of Bitwig seems to break host.scheduleTask()
+		// on Windows. What we're doing is thread safe enough that we can probably just get
+		// away with calling control surface functions. >.>
+		if (OperatingSystem.get() == OperatingSystem.WINDOWS) {
+			task.run();
+		} else {
+			this.host.scheduleTask(task, 0);
 		}
 	}
 
@@ -776,4 +796,9 @@ public abstract class AbstractNIHostInterop {
 			}
 		}
 	}
+
+	/** Used to indicate that our polling thread should stop. */
+    public void shutdown() {
+		this.isShutdown.set(true);
+    }
 }

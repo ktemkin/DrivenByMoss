@@ -28,7 +28,6 @@ import de.mossgrabers.framework.command.trigger.clip.StartSceneCommand;
 import de.mossgrabers.framework.command.trigger.clip.StopClipCommand;
 import de.mossgrabers.framework.command.trigger.mode.ButtonRowModeCommand;
 import de.mossgrabers.framework.command.trigger.mode.KnobRowTouchModeCommand;
-import de.mossgrabers.framework.command.trigger.mode.ModeMultiSelectCommand;
 import de.mossgrabers.framework.command.trigger.track.MuteCommand;
 import de.mossgrabers.framework.command.trigger.track.SoloCommand;
 import de.mossgrabers.framework.command.trigger.transport.ConfiguredRecordCommand;
@@ -43,11 +42,9 @@ import de.mossgrabers.framework.controller.AbstractControllerSetup;
 import de.mossgrabers.framework.controller.ButtonID;
 import de.mossgrabers.framework.controller.ContinuousID;
 import de.mossgrabers.framework.controller.ISetupFactory;
-import de.mossgrabers.framework.controller.color.ColorManager;
 import de.mossgrabers.framework.controller.hardware.BindType;
 import de.mossgrabers.framework.controller.hardware.IHwButton;
 import de.mossgrabers.framework.controller.hardware.IHwRelativeKnob;
-import de.mossgrabers.framework.controller.valuechanger.IValueChanger;
 import de.mossgrabers.framework.controller.valuechanger.RelativeEncoding;
 import de.mossgrabers.framework.controller.valuechanger.TwosComplementValueChanger;
 import de.mossgrabers.framework.daw.IHost;
@@ -146,10 +143,6 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
     @Override
     public void flush ()
     {
-        // Do not flush until handshake has finished
-        if (!this.getSurface ().isConnectedToNIHIA ())
-            return;
-
         final KontrolProtocolControlSurface surface = this.getSurface ();
 
 		/*
@@ -747,13 +740,6 @@ public class KontrolProtocolControllerSetup extends AbstractControllerSetup<Kont
         }
 
         this.moveTrackBank (event, isLeft);
-    }
-
-
-    private int getKnobValue (final int continuousMidiControl)
-    {
-        //final IMode mode = this.getSurface ().getModeManager ().getActive ();
-        //return mode == null ? 0 : Math.max (0, mode.getKnobValue (continuousMidiControl));
     }
 
 

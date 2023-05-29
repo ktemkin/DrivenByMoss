@@ -23,7 +23,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 
 /**
@@ -172,8 +171,7 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
             // Stop flush
             this.isConnectedToNIHIA = false;
 
-            for (int i = 0; i < 8; i++)
-                this.sendKontrolTrackSysEx (KontrolProtocolControlSurface.KONTROL_TRACK_AVAILABLE, TrackType.EMPTY, i);
+			this.niConnection.shutdown();
 
             this.sendCommand (KontrolProtocolControlSurface.CMD_GOODBYE, 0);
         }
@@ -353,6 +351,8 @@ public class KontrolProtocolControlSurface extends AbstractControlSurface<Kontro
 	/** {@inheritDocs} */
 	@Override
 	public void handleKnobEvent(int index, int newValue) {
+
+		this.host.println(String.format("knob event (%d is %d).", index, newValue));
 
 		// ... and if there's a hardware continious control, trigger it to update.
 		final var mode = this.getModeManager().getActive();
